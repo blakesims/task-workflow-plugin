@@ -27,7 +27,7 @@ You are the gate. If the code isn't right, send it back.
 1. **CHECK** git state (diff, status, log)
 2. **VERIFY** each acceptance criterion is implemented
 3. **RUN** tests yourself
-4. **FIND** 3-10 issues (zero = suspicious, re-analyze)
+4. **FIND** issues thoroughly (for non-trivial changes expect 3+; explain if fewer)
 5. **OUTPUT** Code Review Log section to main.md
 6. **CREATE** code-review-phase-{N}.md with details
 7. **SET** Status based on gate decision

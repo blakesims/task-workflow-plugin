@@ -48,10 +48,10 @@
 ---
 
 ## Plan Review
-- **Gate:** PENDING
+- **Gate:** —
 - **Reviewed:** —
 - **Summary:** —
-- **Issues:** — critical, — major, — minor
+- **Issues:** —
 - **Open Questions Finalized:** —
 
 → Details: `plan-review.md`
@@ -61,7 +61,7 @@
 ## Execution Log
 
 ### Phase 1: {title}
-- **Status:** PENDING
+- **Status:** —
 - **Started:** —
 - **Completed:** —
 - **Commits:** —
@@ -74,9 +74,9 @@
 ## Code Review Log
 
 ### Phase 1
-- **Gate:** PENDING
+- **Gate:** —
 - **Reviewed:** —
-- **Issues:** — critical, — major, — minor
+- **Issues:** —
 - **Summary:** —
 
 → Details: `code-review-phase-1.md`

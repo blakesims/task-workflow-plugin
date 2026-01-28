@@ -11,11 +11,12 @@ description: >
 
 ```
 tasks/
+├── global-task-manager.md   # INDEX of all tasks
 ├── active/          # Currently being worked on
 │   └── T008-feature/
 │       ├── main.md              # THE living task document
-│       ├── plan-review.md       # Detailed plan review (if exists)
-│       └── code-review-phase-1.md  # Detailed code reviews per phase
+│       ├── plan-review.md       # Detailed plan review
+│       └── code-review-phase-1.md
 ├── planning/        # Tasks being planned
 ├── paused/          # On hold
 ├── completed/       # Done
@@ -59,6 +60,7 @@ The `main.md` file is the **single source of truth** for a task. All agents upda
 - **Acceptance Criteria:**
   - [ ] AC1: {verifiable outcome}
 - **Files:** {files to modify}
+- **Dependencies:** {what must be true before starting}
 
 #### Phase 2: {title}
 {same structure}
@@ -78,7 +80,7 @@ The `main.md` file is the **single source of truth** for a task. All agents upda
 ---
 
 ## Plan Review
-- **Gate:** PENDING | READY | NEEDS_WORK | NOT_READY
+- **Gate:** READY | NEEDS_WORK | NOT_READY
 - **Reviewed:** {date}
 - **Summary:** {1-2 sentence assessment}
 - **Issues:** {count} critical, {count} major, {count} minor
@@ -91,7 +93,7 @@ The `main.md` file is the **single source of truth** for a task. All agents upda
 ## Execution Log
 
 ### Phase 1: {title}
-- **Status:** PENDING | IN_PROGRESS | COMPLETE | BLOCKED
+- **Status:** IN_PROGRESS | COMPLETE | BLOCKED
 - **Started:** {date}
 - **Completed:** {date}
 - **Commits:** `abc123`, `def456`
@@ -108,7 +110,7 @@ The `main.md` file is the **single source of truth** for a task. All agents upda
 ## Code Review Log
 
 ### Phase 1
-- **Gate:** PENDING | PASS | REVISE | FAIL
+- **Gate:** PASS | REVISE | FAIL
 - **Reviewed:** {date}
 - **Issues:** {count} critical, {count} major, {count} minor
 - **Summary:** {brief assessment}
@@ -131,9 +133,9 @@ The `main.md` file is the **single source of truth** for a task. All agents upda
 | Agent | Reads | Updates in main.md | Creates |
 |-------|-------|-------------------|---------|
 | Planner | Task section | Plan section, Status→PLAN_REVIEW | — |
-| Plan Reviewer | Plan section | Plan Review section, Status→READY/BLOCKED | plan-review.md |
-| Executor | Plan (current phase) | Execution Log section, Status→CODE_REVIEW | — |
-| Code Reviewer | Execution Log, git diff | Code Review Log section, Status→next | code-review-phase-N.md |
+| Plan Reviewer | Plan section | Plan Review section, Status | plan-review.md |
+| Executor | Plan (current phase) | Execution Log section, Status | — |
+| Code Reviewer | Execution Log, git diff | Code Review Log section, Status | code-review-phase-N.md |
 | Phase Reviewer | Code Review Log, next phase | May update Plan with learnings | — |
 
 ## Status Flow
@@ -141,21 +143,21 @@ The `main.md` file is the **single source of truth** for a task. All agents upda
 ```
 PLANNING → PLAN_REVIEW → READY → EXECUTING_PHASE_1 → CODE_REVIEW 
                 ↓                        ↓               ↓
-            BLOCKED              BLOCKED (stuck)    REVISE (back to executor)
+            BLOCKED              BLOCKED (stuck)    REVISE (back to executor, max 3x)
                                                          ↓
-                                                       FAIL (re-plan)
+                                                       FAIL (re-plan → BLOCKED)
      
 After CODE_REVIEW PASS:
   → More phases? → EXECUTING_PHASE_N
   → Last phase? → COMPLETE
 ```
 
-## Orchestrator (Lem) Checks Status
+## Orchestrator Checks Status
 
 To know what to do, read the **Status** field:
 - `PLANNING` → spawn planner
 - `PLAN_REVIEW` → spawn plan reviewer  
-- `READY` → start execution, spawn executor for Phase 1
+- `READY` → spawn executor for Phase 1
 - `EXECUTING_PHASE_N` → executor working (or spawn if not running)
 - `CODE_REVIEW` → spawn code reviewer
 - `BLOCKED` → report to human with open questions

@@ -1,6 +1,6 @@
 # Task Workflow Architecture
 
-> A multi-agent development workflow where Lem (Clawdbot) orchestrates Claude Code subprocesses.
+> A multi-agent development workflow where an orchestrator spawns Claude Code subprocesses.
 
 ## Executive Summary
 
@@ -10,9 +10,9 @@
 
 **Key Insights:**
 - Claude Code workers are stateless — state lives in files
-- Lem is the orchestrator and memory
-- Agents use `skills` field for deterministic skill loading (not description matching)
-- Subagents cannot spawn subagents — workflow must be flat
+- The orchestrator maintains memory and coordinates agents
+- Agents use `skills` field in frontmatter for deterministic skill loading
+- Agents run sequentially (no parallel writes to main.md)
 
 ---
 
@@ -20,15 +20,13 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                          LEM (ORCHESTRATOR)                             │
+│                           ORCHESTRATOR                                  │
 │                                                                         │
 │  • Receives task from human                                            │
 │  • Spawns CC subprocesses for each step                                │
-│  • Reads outputs, makes gate decisions                                 │
+│  • Reads structured outputs, makes gate decisions                      │
+│  • Updates global-task-manager.md                                      │
 │  • Reports back on blockers/completion                                 │
-│                                                                         │
-│  Context: ~/clawd/memory/*, conversation history                       │
-│  Tools: exec (pty), process, sessions_spawn, web_search, etc.          │
 └────────────────────────────┬────────────────────────────────────────────┘
                              │
                              │ exec pty:true workdir:PROJECT
@@ -41,7 +39,7 @@
 │                                                                         │
 │  Context per invocation:                                               │
 │  • PROJECT/CLAUDE.md (auto-loaded from workdir)                        │
-│  • ~/.claude/skills/* (auto-loaded by description matching)            │
+│  • Skills from agent's `skills` field (deterministic injection)        │
 │  • ~/.claude/agents/X.md (via --agent X flag)                          │
 │  • Files explicitly read during execution                              │
 └─────────────────────────────────────────────────────────────────────────┘
@@ -56,7 +54,7 @@ project/
 ├── CLAUDE.md                    # Project conventions (CC reads this)
 └── tasks/
     ├── CLAUDE.md                # Task-specific conventions/templates
-    ├── global-task-manager.md   # INDEX of all tasks (Lem maintains this)
+    ├── global-task-manager.md   # INDEX of all tasks (orchestrator maintains)
     ├── active/
     │   └── T008-feature/
     │       ├── main.md              # THE living task document
@@ -76,9 +74,9 @@ The `global-task-manager.md` file is the **index of all tasks**. It provides:
 - Blocked tasks highlighted for human attention
 - Next available task ID
 
-**Who updates it:** Lem (orchestrator), NOT the CC agents.
+**Who updates it:** The orchestrator, NOT the CC agents.
 
-After each CC agent run, Lem:
+After each CC agent run, the orchestrator:
 1. Reads the structured JSON output
 2. Updates the relevant row in global-task-manager.md
 3. Moves rows between sections if status changed (e.g., active → completed)
@@ -191,6 +189,7 @@ Human: "Implement feature X"
 │    Updates: main.md Code Review Log │
 │    Creates: code-review-phase-N.md  │
 │    Gate: PASS / REVISE / FAIL       │
+│    (Max 3 REVISE cycles → FAIL)     │
 └─────────────────────────────────────┘
               │
       ┌───────┼───────┐
@@ -199,11 +198,12 @@ Human: "Implement feature X"
       │       │       │
       │       │       └──→ BLOCKED (needs re-planning)
       │       │
-      │       └──→ Back to executor with feedback
+      │       └──→ Back to executor (max 3 times)
       ▼
 ┌─────────────────────────────────────┐
-│ 5. PHASE REVIEW (optional)          │
+│ 5. PHASE REVIEW (conditional)       │
 │    Agent: phase-reviewer            │
+│    Skip if: 0 critical/major issues │
 │    Updates: Plan if learnings apply │
 │    Gate: GO / BLOCK                 │
 └─────────────────────────────────────┘
@@ -218,23 +218,64 @@ Human: "Implement feature X"
 
 ## Agent Responsibilities
 
-| Agent | Skills Loaded | Tools | Model | Permission |
-|-------|---------------|-------|-------|------------|
-| **planner** | plan, task-workflow | Read, Glob, Grep, Bash | sonnet | default |
-| **plan-reviewer** | review-plan, task-workflow | Read, Glob, Grep, Bash | sonnet | plan (read-only) |
-| **executor** | execute, task-workflow | All | sonnet | acceptEdits |
-| **code-reviewer** | review-code, task-workflow | Read, Glob, Grep, Bash | sonnet | plan (read-only) |
-| **phase-reviewer** | review-phase, task-workflow | All | haiku | default |
+| Agent | Skills Loaded | Purpose |
+|-------|---------------|---------|
+| **planner** | plan, task-workflow | Creates implementation plans |
+| **plan-reviewer** | review-plan, task-workflow | Validates plans, finds gaps |
+| **executor** | execute, task-workflow | Implements phases |
+| **code-reviewer** | review-code, task-workflow | Reviews implementations |
+| **phase-reviewer** | review-phase, task-workflow | Bridges phases, applies learnings |
 
 ### What Each Agent Outputs
 
-| Agent | Updates main.md | Creates |
-|-------|-----------------|---------|
-| **planner** | Plan section, Status→PLAN_REVIEW | — |
-| **plan-reviewer** | Plan Review section, Status | plan-review.md |
-| **executor** | Execution Log, Status | — |
-| **code-reviewer** | Code Review Log, Status | code-review-phase-N.md |
-| **phase-reviewer** | Plan (if learnings) | — |
+| Agent | Updates main.md | Creates | Sets Status |
+|-------|-----------------|---------|-------------|
+| **planner** | Plan section | — | PLAN_REVIEW |
+| **plan-reviewer** | Plan Review section | plan-review.md | READY / PLANNING / BLOCKED |
+| **executor** | Execution Log | — | CODE_REVIEW / BLOCKED |
+| **code-reviewer** | Code Review Log | code-review-phase-N.md | EXECUTING_PHASE_N+1 / COMPLETE / BLOCKED |
+| **phase-reviewer** | Plan (if learnings) | — | (unchanged) / BLOCKED |
+
+---
+
+## Iteration Limits
+
+To prevent infinite loops:
+
+| Situation | Limit | Action |
+|-----------|-------|--------|
+| REVISE cycles (code review) | 3 | After 3 REVISE → FAIL → BLOCKED |
+| NEEDS_WORK cycles (plan review) | 3 | After 3 NEEDS_WORK → escalate to human |
+
+The orchestrator tracks iteration counts and enforces limits.
+
+---
+
+## BLOCKED Recovery Procedure
+
+When a task is BLOCKED:
+
+1. **Human reviews** the blocker (open questions, failed gate, etc.)
+2. **Human answers** questions or provides guidance in main.md
+3. **Human updates Status** to the appropriate previous state:
+   - If blocked during PLAN_REVIEW → set to `PLANNING` or `PLAN_REVIEW`
+   - If blocked during CODE_REVIEW → set to `EXECUTING_PHASE_N`
+   - If blocked during execution → set to `EXECUTING_PHASE_N`
+4. **Human tells orchestrator** to continue: "Continue T008"
+5. **Orchestrator resumes** from the new status
+
+---
+
+## Phase Reviewer Skip Conditions
+
+The phase-reviewer step is **conditional**. Skip it when:
+- Previous phase had **0 critical issues** AND **0 major issues**
+- No significant learnings to propagate
+
+Run it when:
+- Previous phase had issues that might affect future phases
+- Patterns were discovered that should update the plan
+- The executor made deviations that need documentation
 
 ---
 
@@ -261,6 +302,7 @@ PLAN_REVIEW                                            │
     ┌───────────────┼───────────────┐
     │               │               │
   [PASS]        [REVISE]        [FAIL]
+    │           (max 3)             │
     │               │               │
     │               └──→ EXECUTING_PHASE_N (retry)
     │                               │
@@ -273,16 +315,16 @@ More phases? ──→ EXECUTING_PHASE_N+1 ──→ CODE_REVIEW ──→ ...
 
 ---
 
-## Lem's Orchestration Logic
+## Orchestrator Logic
 
-To decide what to do, Lem reads the **Status** field in main.md:
+To decide what to do, read the **Status** field in main.md:
 
-| Status | Lem's Action |
-|--------|--------------|
+| Status | Action |
+|--------|--------|
 | `PLANNING` | Spawn planner agent |
 | `PLAN_REVIEW` | Spawn plan-reviewer agent |
 | `READY` | Spawn executor for Phase 1 |
-| `EXECUTING_PHASE_N` | Check if executor running; if not, spawn |
+| `EXECUTING_PHASE_N` | Check if executor running; if not, spawn for Phase N |
 | `CODE_REVIEW` | Spawn code-reviewer agent |
 | `BLOCKED` | Report to human with open questions/blocker |
 | `COMPLETE` | Report success to human |
@@ -291,7 +333,7 @@ To decide what to do, Lem reads the **Status** field in main.md:
 
 ## Invocation Patterns
 
-Since agents have `skills` field in frontmatter, skills are loaded automatically. No need for `--append-system-prompt`.
+Skills are loaded via agent frontmatter `skills` field — no need for `--append-system-prompt`.
 
 ### Spawn Planner
 ```bash
@@ -317,141 +359,47 @@ exec pty:true workdir:PROJECT background:true \
   command:"claude --agent code-reviewer -p 'Review Phase 2 execution in tasks/active/T008-feature/main.md'"
 ```
 
-### With Structured Output (optional)
+### With Structured Output
 For machine-parseable gate decisions:
 ```bash
 claude --agent plan-reviewer \
   --output-format json \
-  --json-schema '{"type":"object","properties":{"gate":{"enum":["READY","NEEDS_WORK","NOT_READY"]},"issues":{"type":"array"}},"required":["gate"]}' \
+  --json-schema "$(cat schemas/plan-reviewer-output.json)" \
   -p 'Review tasks/active/T008-feature/main.md'
 ```
 
 ---
 
-## Context Flow
-
-### What Each Agent Sees
-
-**Planner:**
-- Task description (from prompt)
-- PROJECT/CLAUDE.md, tasks/CLAUDE.md
-- Codebase (via Read/Bash)
-- ~/.claude/skills/plan/SKILL.md (auto-triggered)
-- ~/.claude/agents/planner.md (via --agent)
-
-**Plan Reviewer:**
-- main.md (the plan)
-- ~/.claude/skills/review-plan/SKILL.md
-- ~/.claude/agents/plan-reviewer.md
-
-**Executor:**
-- main.md (current phase)
-- Codebase (Read/Write/Bash)
-- ~/.claude/skills/execute/SKILL.md
-- ~/.claude/agents/executor.md
-
-**Code Reviewer:**
-- main.md (execution log)
-- Git state (diff, log)
-- ~/.claude/skills/review-code/SKILL.md
-- ~/.claude/agents/code-reviewer.md
-
-### What Persists Between Invocations
-
-**Files (the handoff mechanism):**
-- main.md — the living document
-- plan-review.md — detailed review
-- code-review-phase-N.md — detailed reviews
-- Git commits — the actual code
-
-**Lem's memory:**
-- Conversation with human
-- Which task is active
-- What step we're on
-
-**NOT persisted:**
-- CC session memory (each invocation is stateless)
-- CC's "thinking" from previous steps
-
----
-
-## When to Return to Human
-
-**Blockers (BLOCKED status):**
-- Plan has open questions needing input
-- Code review FAIL (needs re-planning)
-- Executor hit unexpected blocker
-
-**Completion:**
-- All phases executed and passed
-- Summary of what was delivered
-
-**NOT blockers (continue autonomously):**
-- Plan review NEEDS_WORK (planner can fix)
-- Code review REVISE (executor can fix)
-
----
-
-## File Locations
-
-```
-~/.claude/
-├── agents/
-│   ├── planner.md
-│   ├── plan-reviewer.md
-│   ├── executor.md
-│   ├── code-reviewer.md
-│   └── phase-reviewer.md
-├── skills/
-│   ├── task-workflow/SKILL.md   # Overview of task structure
-│   ├── plan/SKILL.md
-│   ├── review-plan/SKILL.md
-│   ├── execute/SKILL.md
-│   ├── review-code/SKILL.md
-│   └── review-phase/SKILL.md
-```
-
 ## Agent File Format
 
-Agents require YAML frontmatter with `name` and `description`. Optional fields provide more control:
+Agents require YAML frontmatter with `name` and `description`:
 
 ```yaml
 ---
 name: planner
 description: Creates implementation plans for tasks
-skills:                    # Skills injected at startup (deterministic!)
+skills:
   - plan
   - task-workflow
-tools: Read, Glob, Grep, Bash    # Allowed tools (inherits all if omitted)
-disallowedTools: Write, Edit     # Tools to deny
-model: sonnet                     # sonnet, opus, haiku, or inherit
-permissionMode: plan              # default, acceptEdits, dontAsk, bypassPermissions, plan
 ---
 
 # Agent prompt content here...
 ```
 
-### Key Fields
+### Required Fields
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `name` | Yes | Unique identifier (lowercase, hyphens) |
-| `description` | Yes | When to use this agent |
-| `skills` | No | Skills to inject at startup |
-| `tools` | No | Allowed tools (inherits all if omitted) |
-| `disallowedTools` | No | Tools to deny |
-| `model` | No | Model to use (default: inherit) |
-| `permissionMode` | No | Permission handling mode |
+| Field | Description |
+|-------|-------------|
+| `name` | Unique identifier (lowercase, hyphens) |
+| `description` | When to use this agent |
 
-### Permission Modes
+### Optional Fields
 
-| Mode | Behavior |
-|------|----------|
-| `default` | Standard permission prompts |
-| `acceptEdits` | Auto-accept file edits |
-| `dontAsk` | Auto-deny prompts (allowed tools still work) |
-| `bypassPermissions` | Skip all checks (use with caution) |
-| `plan` | Read-only exploration mode |
+| Field | Description |
+|-------|-------------|
+| `skills` | Skills to inject at startup (deterministic loading) |
+
+See [Claude Code subagents documentation](https://code.claude.com/docs/sub-agents) for additional optional fields like `tools`, `model`, and `permissionMode`.
 
 ---
 
@@ -460,7 +408,7 @@ permissionMode: plan              # default, acceptEdits, dontAsk, bypassPermiss
 ### Start a Task
 1. Create `tasks/active/T00N-name/main.md` with Task section
 2. Set Status: `PLANNING`
-3. Tell Lem: "Start T00N"
+3. Tell orchestrator: "Start T00N"
 
 ### Check Progress
 1. Read `tasks/active/T00N-name/main.md`
@@ -469,8 +417,8 @@ permissionMode: plan              # default, acceptEdits, dontAsk, bypassPermiss
 
 ### Resume After Blocker
 1. Answer open questions in main.md
-2. Update Status to appropriate step
-3. Tell Lem: "Continue T00N"
+2. Update Status to appropriate step (see BLOCKED Recovery)
+3. Tell orchestrator: "Continue T00N"
 
 ---
 
@@ -480,5 +428,7 @@ permissionMode: plan              # default, acceptEdits, dontAsk, bypassPermiss
 2. **Stateless workers:** CC invocations are independent
 3. **File-based handoffs:** State lives in files, not memory
 4. **Clear gates:** Each step has pass/fail criteria
-5. **Human in the loop:** Blockers surface to human
-6. **Audit trail:** Supporting docs preserve details
+5. **Iteration limits:** Prevent infinite loops (3 REVISE max)
+6. **Human in the loop:** Blockers surface to human
+7. **Sequential execution:** One agent at a time (no conflicts)
+8. **Audit trail:** Supporting docs preserve details

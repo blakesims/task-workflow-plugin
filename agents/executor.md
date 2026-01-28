@@ -36,15 +36,26 @@ Your output goes to the Code Reviewer. Document what you did accurately.
 - Write tests for new functionality
 - Keep commits atomic
 - Report progress
+- Fix obvious typos/errors in the plan (file paths, variable names)
 
 **DO NOT:**
 - Refactor outside phase scope
 - Add features not in plan
 - Skip tests
 - Continue past a blocker
+- Change behavioral decisions (those need re-planning)
+
+## What Counts as "Improvising"
+- ✅ **OK:** Fixing `wrong-file.ts` → `correct-file.ts` (obvious typo)
+- ✅ **OK:** Using a slightly different API that does the same thing
+- ❌ **NOT OK:** Adding error handling not in the plan
+- ❌ **NOT OK:** Changing the approach because you think it's better
+- ❌ **NOT OK:** Implementing extra features "while you're at it"
+
+When in doubt: document the deviation and let code reviewer decide.
 
 ## When Blocked
 1. Document exactly what's blocking
 2. Note what you tried
-3. **STOP** — do not improvise
+3. **STOP** — do not improvise on blockers
 4. Set Status: `BLOCKED` with reason

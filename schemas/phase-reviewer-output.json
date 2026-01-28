@@ -3,7 +3,7 @@
   "title": "Phase Reviewer Output",
   "description": "Structured output from the phase-reviewer agent",
   "type": "object",
-  "required": ["checklist", "gate", "next_phase"],
+  "required": ["checklist", "gate", "next_phase", "status_set_to"],
   "properties": {
     "checklist": {
       "type": "object",
@@ -24,6 +24,10 @@
     "gate": {
       "enum": ["GO", "UPDATE", "BLOCK"],
       "description": "Gate decision for proceeding to next phase"
+    },
+    "status_set_to": {
+      "enum": ["EXECUTING_PHASE_N", "BLOCKED"],
+      "description": "Status set in main.md (EXECUTING_PHASE_N for GO/UPDATE, BLOCKED for BLOCK)"
     },
     "next_phase": {
       "type": "integer",

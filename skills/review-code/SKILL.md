@@ -2,7 +2,7 @@
 name: review-code
 description: >
   Adversarial code review of executed phases. Verify implementation matches plan,
-  find bugs and edge cases. Must find 3-10 issues. Use after phase execution.
+  find bugs and edge cases. Use after phase execution.
 ---
 
 # Code Review Skill
@@ -26,10 +26,10 @@ Planner → Plan Reviewer → Executor → [Code Reviewer] → Phase Reviewer �
 
 ## Critical Actions
 
-1. **FIND** 3-10 issues minimum — zero findings = HALT
-2. **VERIFY** claims against actual git state
-3. **CHECK** each acceptance criterion is actually implemented
-4. **RUN** tests yourself — don't trust claims
+1. **CHECK** git state against execution report
+2. **VERIFY** each acceptance criterion is actually implemented
+3. **RUN** tests yourself — don't trust claims
+4. **FIND** issues thoroughly (for non-trivial changes expect 3+; for trivial changes explain if fewer)
 5. **UPDATE** `main.md` Code Review Log section
 6. **CREATE** `code-review-phase-{N}.md` with details
 

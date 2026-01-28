@@ -96,6 +96,7 @@ Then update Status:
 - Write tests for new functionality
 - Keep commits atomic
 - Report progress on each task
+- Fix obvious typos/errors in the plan (file paths, variable names)
 
 **DO NOT:**
 - Refactor outside phase scope
@@ -103,6 +104,17 @@ Then update Status:
 - Skip tests "to save time"
 - Assume without verifying
 - Continue past a blocker
+- Change behavioral decisions (those need re-planning)
+
+## What Counts as "Improvising"
+
+- ✅ **OK:** Fixing `wrong-file.ts` → `correct-file.ts` (obvious typo)
+- ✅ **OK:** Using a slightly different API that does the same thing
+- ❌ **NOT OK:** Adding error handling not in the plan
+- ❌ **NOT OK:** Changing the approach because you think it's better
+- ❌ **NOT OK:** Implementing extra features "while you're at it"
+
+When in doubt: document the deviation and let code reviewer decide.
 
 ## When Blocked
 

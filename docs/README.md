@@ -41,7 +41,7 @@ Tasks live in a `tasks/` directory:
 
 ```
 tasks/
-├── global-task-manager.md   # INDEX of all tasks (Lem maintains)
+├── global-task-manager.md   # INDEX of all tasks (orchestrator maintains)
 ├── active/
 │   └── T008-feature/
 │       ├── main.md              # Living task document

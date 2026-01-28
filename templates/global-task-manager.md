@@ -1,6 +1,6 @@
 # Global Task Manager
 
-Central index of all tasks. Updated by orchestrator (Lem) after each agent run.
+Central index of all tasks. Updated by orchestrator after each agent run.
 
 ## Active Tasks
 
