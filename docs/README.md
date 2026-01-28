@@ -41,6 +41,7 @@ Tasks live in a `tasks/` directory:
 
 ```
 tasks/
+├── global-task-manager.md   # INDEX of all tasks (Lem maintains)
 ├── active/
 │   └── T008-feature/
 │       ├── main.md              # Living task document
@@ -50,6 +51,14 @@ tasks/
 ├── completed/
 └── archived/
 ```
+
+### Templates
+
+The `templates/` directory contains:
+- `global-task-manager.md` — Initialize your task index
+- `main.md` — Template for new task documents
+
+Copy these to your project's `tasks/` directory to get started.
 
 ### main.md Format
 

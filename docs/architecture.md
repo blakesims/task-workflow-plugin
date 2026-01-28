@@ -56,6 +56,7 @@ project/
 ├── CLAUDE.md                    # Project conventions (CC reads this)
 └── tasks/
     ├── CLAUDE.md                # Task-specific conventions/templates
+    ├── global-task-manager.md   # INDEX of all tasks (Lem maintains this)
     ├── active/
     │   └── T008-feature/
     │       ├── main.md              # THE living task document
@@ -66,6 +67,23 @@ project/
     ├── completed/               # Done
     └── archived/                # Old/cancelled
 ```
+
+## Global Task Manager
+
+The `global-task-manager.md` file is the **index of all tasks**. It provides:
+- Quick overview of all task statuses
+- Links to task directories
+- Blocked tasks highlighted for human attention
+- Next available task ID
+
+**Who updates it:** Lem (orchestrator), NOT the CC agents.
+
+After each CC agent run, Lem:
+1. Reads the structured JSON output
+2. Updates the relevant row in global-task-manager.md
+3. Moves rows between sections if status changed (e.g., active → completed)
+
+This keeps CC agents simple and avoids conflicts.
 
 ---
 
