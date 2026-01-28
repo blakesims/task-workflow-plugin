@@ -124,6 +124,11 @@ The `logs/observations.jsonl` file tracks workflow observations:
 
 Review observations periodically to refine agents and schemas.
 
+## Documentation
+
+- [Architecture](./architecture.md) — Full system design and invocation patterns
+- [Lessons Learned](./lessons-learned.md) — First live test results and gotchas
+
 ## License
 
 MIT
