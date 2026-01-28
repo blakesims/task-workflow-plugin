@@ -1,0 +1,2 @@
+# Observation logs go here
+# Format: JSONL with fields: timestamp, agent, phase, observation, severity, suggestion

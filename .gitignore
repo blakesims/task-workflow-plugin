@@ -1,0 +1,11 @@
+# Logs (track structure, not content)
+logs/*.jsonl
+!logs/.gitkeep
+
+# OS
+.DS_Store
+
+# Editor
+*.swp
+*.swo
+*~

@@ -1,0 +1,11 @@
+{
+  "name": "task-workflow",
+  "description": "Multi-agent task workflow with planning, review, execution, and code review. Provides structured development cycles with file-based handoffs and gate decisions.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Blake Sims",
+    "url": "https://github.com/blakesims"
+  },
+  "repository": "https://github.com/blakesims/task-workflow-plugin",
+  "license": "MIT"
+}

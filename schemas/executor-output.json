@@ -1,0 +1,72 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Executor Output",
+  "description": "Structured output from the executor agent",
+  "type": "object",
+  "required": ["checklist", "gate", "phase", "status_set_to"],
+  "properties": {
+    "checklist": {
+      "type": "object",
+      "description": "Verification that all required steps were completed",
+      "required": [
+        "read_phase",
+        "set_executing_status",
+        "executed_tasks",
+        "ran_tests",
+        "committed_changes",
+        "updated_main_md",
+        "set_final_status"
+      ],
+      "properties": {
+        "read_phase": { "type": "boolean" },
+        "set_executing_status": { "type": "boolean" },
+        "executed_tasks": { "type": "boolean" },
+        "ran_tests": { "type": "boolean" },
+        "committed_changes": { "type": "boolean" },
+        "updated_main_md": { "type": "boolean" },
+        "set_final_status": { "type": "boolean" }
+      }
+    },
+    "gate": {
+      "enum": ["COMPLETE", "BLOCKED"],
+      "description": "Whether the phase completed or hit a blocker"
+    },
+    "phase": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Which phase was executed"
+    },
+    "status_set_to": {
+      "enum": ["CODE_REVIEW", "BLOCKED"],
+      "description": "Status set in main.md"
+    },
+    "tasks_completed": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of tasks completed"
+    },
+    "tasks_total": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Total tasks in the phase"
+    },
+    "commits": {
+      "type": "array",
+      "description": "Commit hashes created",
+      "items": { "type": "string" }
+    },
+    "files_modified": {
+      "type": "array",
+      "description": "Files that were modified",
+      "items": { "type": "string" }
+    },
+    "blocker": {
+      "type": "string",
+      "description": "Description of blocker if gate is BLOCKED"
+    },
+    "summary": {
+      "type": "string",
+      "description": "Brief summary of execution"
+    }
+  }
+}

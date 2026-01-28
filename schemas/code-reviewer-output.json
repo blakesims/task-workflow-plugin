@@ -1,0 +1,69 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Code Reviewer Output",
+  "description": "Structured output from the code-reviewer agent",
+  "type": "object",
+  "required": ["checklist", "gate", "phase", "status_set_to", "issues"],
+  "properties": {
+    "checklist": {
+      "type": "object",
+      "description": "Verification that all required steps were completed",
+      "required": [
+        "checked_git_state",
+        "verified_acceptance_criteria",
+        "ran_tests",
+        "found_issues",
+        "updated_main_md",
+        "created_code_review_md",
+        "set_status"
+      ],
+      "properties": {
+        "checked_git_state": { "type": "boolean" },
+        "verified_acceptance_criteria": { "type": "boolean" },
+        "ran_tests": { "type": "boolean" },
+        "found_issues": { "type": "boolean" },
+        "updated_main_md": { "type": "boolean" },
+        "created_code_review_md": { "type": "boolean" },
+        "set_status": { "type": "boolean" }
+      }
+    },
+    "gate": {
+      "enum": ["PASS", "REVISE", "FAIL"],
+      "description": "Gate decision for the code"
+    },
+    "phase": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Which phase was reviewed"
+    },
+    "status_set_to": {
+      "type": "string",
+      "description": "Status set in main.md (EXECUTING_PHASE_N+1, COMPLETE, EXECUTING_PHASE_N for REVISE, or BLOCKED)"
+    },
+    "issues": {
+      "type": "object",
+      "description": "Count of issues found by severity",
+      "properties": {
+        "critical": { "type": "integer", "minimum": 0 },
+        "major": { "type": "integer", "minimum": 0 },
+        "minor": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "is_last_phase": {
+      "type": "boolean",
+      "description": "Whether this was the final phase"
+    },
+    "acceptance_criteria_met": {
+      "type": "integer",
+      "description": "Number of acceptance criteria verified as met"
+    },
+    "acceptance_criteria_total": {
+      "type": "integer",
+      "description": "Total acceptance criteria for the phase"
+    },
+    "summary": {
+      "type": "string",
+      "description": "Brief summary of the review"
+    }
+  }
+}

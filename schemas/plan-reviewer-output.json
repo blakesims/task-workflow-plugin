@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Plan Reviewer Output",
+  "description": "Structured output from the plan-reviewer agent",
+  "type": "object",
+  "required": ["checklist", "gate", "status_set_to", "issues"],
+  "properties": {
+    "checklist": {
+      "type": "object",
+      "description": "Verification that all required steps were completed",
+      "required": [
+        "read_plan",
+        "validated_questions",
+        "hunted_gaps",
+        "updated_main_md",
+        "created_plan_review_md",
+        "set_status"
+      ],
+      "properties": {
+        "read_plan": { "type": "boolean" },
+        "validated_questions": { "type": "boolean" },
+        "hunted_gaps": { "type": "boolean" },
+        "updated_main_md": { "type": "boolean" },
+        "created_plan_review_md": { "type": "boolean" },
+        "set_status": { "type": "boolean" }
+      }
+    },
+    "gate": {
+      "enum": ["READY", "NEEDS_WORK", "NOT_READY"],
+      "description": "Gate decision for the plan"
+    },
+    "status_set_to": {
+      "enum": ["READY", "PLANNING", "BLOCKED"],
+      "description": "Status set in main.md based on gate decision"
+    },
+    "issues": {
+      "type": "object",
+      "description": "Count of issues found by severity",
+      "properties": {
+        "critical": { "type": "integer", "minimum": 0 },
+        "major": { "type": "integer", "minimum": 0 },
+        "minor": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "open_questions_for_human": {
+      "type": "array",
+      "description": "Questions that need human input before proceeding",
+      "items": { "type": "string" }
+    },
+    "summary": {
+      "type": "string",
+      "description": "Brief summary of the review"
+    }
+  }
+}

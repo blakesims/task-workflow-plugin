@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Planner Output",
+  "description": "Structured output from the planner agent",
+  "type": "object",
+  "required": ["checklist", "status_set_to", "phases_count", "open_questions_count"],
+  "properties": {
+    "checklist": {
+      "type": "object",
+      "description": "Verification that all required steps were completed",
+      "required": [
+        "read_task",
+        "checked_project_conventions",
+        "analyzed_codebase",
+        "created_plan",
+        "created_decision_matrix",
+        "updated_main_md",
+        "set_status"
+      ],
+      "properties": {
+        "read_task": { "type": "boolean" },
+        "checked_project_conventions": { "type": "boolean" },
+        "analyzed_codebase": { "type": "boolean" },
+        "created_plan": { "type": "boolean" },
+        "created_decision_matrix": { "type": "boolean" },
+        "updated_main_md": { "type": "boolean" },
+        "set_status": { "type": "boolean" }
+      }
+    },
+    "status_set_to": {
+      "const": "PLAN_REVIEW",
+      "description": "Status must be set to PLAN_REVIEW after planning"
+    },
+    "phases_count": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Number of phases in the plan"
+    },
+    "open_questions_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of open questions requiring human input"
+    },
+    "summary": {
+      "type": "string",
+      "description": "Brief summary of the plan"
+    }
+  }
+}
