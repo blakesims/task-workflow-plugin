@@ -335,38 +335,65 @@ To decide what to do, read the **Status** field in main.md:
 
 Skills are loaded via agent frontmatter `skills` field — no need for `--append-system-prompt`.
 
+### Required Flags
+
+| Flag | Why |
+|------|-----|
+| `--plugin-dir PATH` | Load plugin agents/skills (not auto-discovered from `~/.claude/plugins/`) |
+| `--allowedTools "Edit Read Write"` | `-p` mode skips workspace trust dialog; file ops need explicit permission |
+| `--agent task-workflow:NAME` | Plugin agents are namespaced `task-workflow:*` |
+
+### Base Command Template
+```bash
+claude \
+  --plugin-dir ~/.claude/plugins/task-workflow \
+  --allowedTools "Edit Read Write" \
+  --agent task-workflow:{AGENT} \
+  -p '{PROMPT}'
+```
+
 ### Spawn Planner
 ```bash
 exec pty:true workdir:PROJECT background:true \
-  command:"claude --agent planner -p 'Create plan for: {task}. Output to tasks/active/T008-feature/main.md'"
+  command:"claude --plugin-dir ~/.claude/plugins/task-workflow --allowedTools 'Edit Read Write' --agent task-workflow:planner -p 'Create plan for: {task}. Output to tasks/active/T008-feature/main.md'"
 ```
 
 ### Spawn Plan Reviewer
 ```bash
 exec pty:true workdir:PROJECT background:true \
-  command:"claude --agent plan-reviewer -p 'Review tasks/active/T008-feature/main.md'"
+  command:"claude --plugin-dir ~/.claude/plugins/task-workflow --allowedTools 'Edit Read Write' --agent task-workflow:plan-reviewer -p 'Review tasks/active/T008-feature/main.md'"
 ```
 
 ### Spawn Executor
 ```bash
 exec pty:true workdir:PROJECT background:true \
-  command:"claude --agent executor -p 'Execute Phase 2 from tasks/active/T008-feature/main.md'"
+  command:"claude --plugin-dir ~/.claude/plugins/task-workflow --allowedTools 'Edit Read Write' --agent task-workflow:executor -p 'Execute Phase 2 from tasks/active/T008-feature/main.md'"
 ```
 
 ### Spawn Code Reviewer
 ```bash
 exec pty:true workdir:PROJECT background:true \
-  command:"claude --agent code-reviewer -p 'Review Phase 2 execution in tasks/active/T008-feature/main.md'"
+  command:"claude --plugin-dir ~/.claude/plugins/task-workflow --allowedTools 'Edit Read Write' --agent task-workflow:code-reviewer -p 'Review Phase 2 execution in tasks/active/T008-feature/main.md'"
 ```
 
 ### With Structured Output
 For machine-parseable gate decisions:
 ```bash
-claude --agent plan-reviewer \
+claude \
+  --plugin-dir ~/.claude/plugins/task-workflow \
+  --allowedTools "Edit Read Write" \
+  --agent task-workflow:plan-reviewer \
   --output-format json \
   --json-schema "$(cat schemas/plan-reviewer-output.json)" \
   -p 'Review tasks/active/T008-feature/main.md'
 ```
+
+### Permission Notes
+
+- **`-p` mode** skips the interactive workspace trust dialog
+- Without `--allowedTools`, agents can read/analyze but **cannot write files**
+- Add Bash commands to allowlist if agents need them: `--allowedTools "Edit Read Write Bash(git:*) Bash(cargo:*)"`
+- For fully trusted environments: `--dangerously-skip-permissions` (sandboxed only)
 
 ---
 
