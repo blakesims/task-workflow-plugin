@@ -87,6 +87,15 @@ The executor successfully picked up partial work from the previous run.
 - File modification times
 - Process CPU usage
 
+### 8. Agent Timeouts Need to Be Long
+**Problem:** Planner and plan-reviewer can take 5-10+ minutes for complex tasks.  
+**Impact:** Default 5-minute timeouts cause premature failures.  
+**Solution:** Always set explicit timeout of at least 10 minutes:
+```bash
+exec timeout:600 ...  # 10 minutes minimum
+```
+For complex plans or large codebases, consider 15-20 minutes.
+
 ---
 
 ## Timing Benchmarks
