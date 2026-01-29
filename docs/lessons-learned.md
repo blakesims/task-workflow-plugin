@@ -96,6 +96,16 @@ exec timeout:600 ...  # 10 minutes minimum
 ```
 For complex plans or large codebases, consider 15-20 minutes.
 
+### 9. PTY Required for Claude CLI (Critical!)
+**Problem:** Claude CLI without a TTY buffers output indefinitely — appears to hang.  
+**Impact:** Commands timeout with zero output, even simple `claude -p "hello"`.  
+**Root Cause:** Claude CLI expects a terminal for streaming output in `-p` mode.  
+**Solution:** Always use `pty:true` when spawning via exec:
+```bash
+exec pty:true timeout:600 background:true command:"claude ..."
+```
+**Discovery:** 2026-01-29 — spent 30 minutes debugging before finding this.
+
 ---
 
 ## Timing Benchmarks
