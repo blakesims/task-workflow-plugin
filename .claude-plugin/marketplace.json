@@ -10,7 +10,7 @@
     {
       "name": "task-workflow",
       "description": "Multi-agent task workflow with planning, review, execution, and code review. Provides structured development cycles with file-based handoffs and gate decisions.",
-      "source": ".",
+      "source": "./",
       "category": "development",
       "version": "0.1.0"
     }

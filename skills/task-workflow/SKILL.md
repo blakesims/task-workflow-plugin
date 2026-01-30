@@ -93,7 +93,7 @@ The `main.md` file is the **single source of truth** for a task. All agents upda
 ## Execution Log
 
 ### Phase 1: {title}
-- **Status:** IN_PROGRESS | COMPLETE | BLOCKED
+- **Status:** EXECUTING_PHASE_N | COMPLETE | BLOCKED
 - **Started:** {date}
 - **Completed:** {date}
 - **Commits:** `abc123`, `def456`
