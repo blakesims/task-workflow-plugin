@@ -327,7 +327,29 @@ To decide what to do, read the **Status** field in main.md:
 | `EXECUTING_PHASE_N` | Check if executor running; if not, spawn for Phase N |
 | `CODE_REVIEW` | Spawn code-reviewer agent |
 | `BLOCKED` | Report to human with open questions/blocker |
-| `COMPLETE` | Report success to human |
+| `COMPLETE` | Move to completed, update global-task-manager, report success |
+
+---
+
+## Directory Transitions
+
+The **orchestrator** (not agents) moves task directories at lifecycle gates:
+
+| Transition | Trigger | Action |
+|------------|---------|--------|
+| planning → active | Plan review gate: `READY` | `git mv tasks/planning/TXXX-name tasks/active/` |
+| active → completed | Final phase code review: `PASS` | `git mv tasks/active/TXXX-name tasks/completed/` |
+
+**Why the orchestrator?** Agents are stateless and focused on their specific job (planning, reviewing, executing). Directory moves are lifecycle operations that span the whole workflow — the orchestrator owns this.
+
+**When to move**:
+1. **planning → active**: Immediately after plan-reviewer returns `READY` gate, before spawning executor
+2. **active → completed**: After final code-reviewer returns `PASS`, as part of completion wrap-up
+
+**Global task manager updates**:
+- Update `global-task-manager.md` link paths after directory moves
+- Move row to "Recently Completed" section when task completes
+- Commit these changes: `git add tasks/ && git commit -m "chore: complete TXXX"`
 
 ---
 
