@@ -136,6 +136,79 @@ cd PROJECT_DIR && claude \
 
 ---
 
+### 10. Claude Code Can Self-Orchestrate
+**Discovery:** 2026-01-29
+**Finding:** Claude Code itself can orchestrate the workflow using either:
+- **Task tool** with `subagent_type="task-workflow:planner"` — native, no PTY needed
+- **CLI via Bash** with `--agent task-workflow:planner` — supports `--json-schema`
+
+The Task tool approach is simpler but lacks schema validation. The CLI approach gives structured JSON output with validated gates. See `docs/cli-reference.md` for details.
+
+**Version note:** The `--agent` flag requires Claude Code v2.1.23+.
+
+---
+
+## Planning Guidelines
+
+### 11. Phase Granularity: Validation vs Implementation Tasks
+
+**Discovery:** 2026-01-30
+**Task:** T001 Claude Code Plugin Validation (Lem project)
+
+**Problem:** T001 was planned with 5 phases for a validation task:
+1. Plugin Scaffold and SessionStart Hook
+2. Agent Definition and Invocation
+3. Headless Mode and Hook Compatibility
+4. Session Resume Functionality
+5. Validation Report and Cleanup
+
+**What happened:**
+- Phase 3 was redundant — Phase 1 already tested headless mode
+- Phases 3-4 produced no new code, just testing
+- Each phase triggered the full plan→execute→review cycle (5× overhead)
+
+**Better approach for validation tasks:**
+
+| Phase | Scope |
+|-------|-------|
+| 1. Build | Create all files (scaffold, hooks, agents) |
+| 2. Validate | Test all capabilities comprehensively |
+| 3. Report | Document findings |
+
+Or even 2 phases: Build → Validate (with report as part of validation).
+
+**Guideline:**
+- **Implementation tasks** (building features): More phases make sense — each produces working code that builds incrementally
+- **Validation/exploration tasks** (answering questions): Minimize phases — you're testing, not building
+
+**Note:** The plan-reviewer already caught over-phasing in T005 (4 phases → 2 phases). Trust the plan-reviewer to simplify, or explicitly instruct the planner to prefer fewer phases for validation work.
+
+---
+
+### 12. Headless Mode File Writes Need Extra Flags
+
+**Discovery:** 2026-01-30
+**Task:** T005 Handover Mechanism (Lem project)
+
+**Problem:** Handover script worked interactively but failed in headless cron mode — agent couldn't write files.
+
+**Root Cause:** `claude -p` mode sandboxes file access. The agent needs explicit permission to write outside the working directory.
+
+**Solution:** Three flags needed for headless agents that write files:
+
+```bash
+claude -p \
+  --plugin-dir ~/.claude/plugins/lem-engine \
+  --agent lem-engine:handover \
+  --add-dir "$HOME/lem" \              # Grant access to write directory
+  --permission-mode acceptEdits \       # Auto-accept file edits
+  "Generate handover"
+```
+
+**Key insight:** Interactive mode prompts for permissions; headless mode needs them pre-granted.
+
+---
+
 ## Future Improvements
 
 1. **Add Rust toolchain to server** — enables `cargo check` during execution
