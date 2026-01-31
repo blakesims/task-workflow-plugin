@@ -471,6 +471,46 @@ See [Claude Code subagents documentation](https://code.claude.com/docs/sub-agent
 
 ---
 
+## Self-Improvement
+
+When agents discover improvements to the workflow, they should update the **source files**, not the cached copies.
+
+### Skill Source Locations
+
+Each skill has `source_repo` and `source_path` in its frontmatter:
+
+```yaml
+---
+name: orchestrate
+source_repo: ~/repos/task-workflow-plugin
+source_path: skills/orchestrate/SKILL.md
+---
+```
+
+**When improving a skill:**
+1. Edit the source file at `{source_repo}/{source_path}`
+2. Do NOT edit `~/.claude/skills/` — that's a cached copy
+3. The cache is overwritten on plugin reload
+
+### Plugin Cache Behavior
+
+Claude Code copies plugins to a cache directory. This means:
+- Edits to `~/.claude/skills/` or `~/.claude/agents/` affect the cached copy only
+- The source repo (`~/repos/task-workflow-plugin/`) is the canonical version
+- Use `--plugin-dir ~/repos/task-workflow-plugin` during development
+
+### Observations Log
+
+Track workflow observations in `logs/observations.jsonl`:
+
+```jsonl
+{"timestamp": "2026-01-31T...", "agent": "executor", "observation": "...", "severity": "major"}
+```
+
+Review periodically to refine agents and schemas.
+
+---
+
 ## Design Principles
 
 1. **Single source of truth:** main.md is authoritative

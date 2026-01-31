@@ -3,6 +3,8 @@ name: review-code
 description: >
   Adversarial code review of executed phases. Verify implementation matches plan,
   find bugs and edge cases. Use after phase execution.
+source_repo: ~/repos/task-workflow-plugin
+source_path: skills/review-code/SKILL.md
 ---
 
 # Code Review Skill

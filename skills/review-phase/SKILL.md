@@ -3,6 +3,8 @@ name: review-phase
 description: >
   Mini review before next phase. Incorporate learnings, verify phase is ready,
   update plan if needed. Use between phases to ensure continuity.
+source_repo: ~/repos/task-workflow-plugin
+source_path: skills/review-phase/SKILL.md
 ---
 
 # Phase Review Skill

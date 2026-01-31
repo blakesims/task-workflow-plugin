@@ -3,6 +3,8 @@ name: task-workflow
 description: >
   Understand the multi-agent task workflow structure. Reference this when working
   on tasks in a tasks/ directory. Defines main.md format and agent responsibilities.
+source_repo: ~/repos/task-workflow-plugin
+source_path: skills/task-workflow/SKILL.md
 ---
 
 # Task Workflow
