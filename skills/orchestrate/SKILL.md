@@ -59,8 +59,10 @@ Human → Planner → Plan Reviewer → GATE → Executor → Code Reviewer → 
 **ALWAYS use the Task tool to spawn agents:**
 
 ```
-Task(subagent_type="task-workflow:executor", prompt="Execute Phase 1 of T007 from tasks/active/T007-feature/main.md")
+Task(subagent_type="{plugin}:executor", prompt="Execute Phase 1 of T007 from tasks/active/T007-feature/main.md")
 ```
+
+Where `{plugin}` is `lem-engine` (if running via lem) or `task-workflow` (if running standalone).
 
 **DO NOT:**
 - Use `Bash(claude --agent ...)` — that spawns a separate CLI process
@@ -107,11 +109,15 @@ Also update `global-task-manager.md`:
 
 ## Agent Names
 
-Always use namespaced names:
-- `task-workflow:planner`
-- `task-workflow:plan-reviewer`
-- `task-workflow:executor`
-- `task-workflow:code-reviewer`
+Agent names are prefixed with the plugin name that loaded them:
+
+**If loaded via task-workflow plugin:**
+- `task-workflow:planner`, `task-workflow:executor`, etc.
+
+**If loaded via lem-engine plugin (symlinked):**
+- `lem-engine:planner`, `lem-engine:executor`, etc.
+
+Check which plugin you're running under and use the matching prefix.
 - `task-workflow:phase-reviewer`
 
 ## Key Files
