@@ -209,6 +209,72 @@ claude -p \
 
 ---
 
+### 13. Cache vs Source: Agents Edit Wrong Location
+
+**Discovery:** 2026-01-31
+**Task:** Plugin architecture analysis
+
+**Problem:** When agents discover improvements to skills/prompts, they edit `~/.claude/skills/` (the cached copy) instead of the source repo. Changes are silently lost on next plugin reload.
+
+**Root Causes:**
+1. Skills are loaded from cache, so that's the file path agents see
+2. Only 1 of 7 skills had explicit "don't edit here" warnings
+3. No enforcement mechanism prevents editing cache
+4. `source_repo` metadata was informational only, not a clear instruction
+
+**What Agents Did Wrong:**
+- Edited `~/.claude/skills/orchestrate/SKILL.md` (cache) ❌
+- Used `Bash(claude --agent ...)` instead of native `Task()` tool
+- Orchestrator executed code directly instead of spawning subagents
+
+**Solutions Applied:**
+1. Added explicit "Editing This Skill" section to ALL 7 skills
+2. Added clear warnings: "edit source file above, NOT `~/.claude/skills/`"
+3. Updated orchestrate skill: "NEVER use Bash(claude --agent ...)"
+4. Updated orchestrate skill: "You are a coordinator, not a worker"
+5. Integrated task-workflow into lem-plugin via **symlinks** (edits go to source automatically)
+
+**Best Practice:**
+- Use symlinks from deployed plugin to source repo
+- Each skill must have explicit edit location warning
+- Test self-improvement by checking which file was modified
+
+---
+
+### 14. Plugin Integration via Symlinks
+
+**Discovery:** 2026-01-31
+**Context:** Integrating task-workflow-plugin into lem-plugin
+
+**Problem:** Two plugins need to work together:
+- `lem-plugin` (master agent, runs via `lem` alias)
+- `task-workflow-plugin` (orchestration engine)
+
+Copying files creates sync burden and cache/source confusion.
+
+**Solution:** Symlink task-workflow skills/agents into lem-plugin:
+```
+lem-plugin/plugin/skills/orchestrate → ~/repos/task-workflow-plugin/skills/orchestrate
+lem-plugin/plugin/agents/executor.md → ~/repos/task-workflow-plugin/agents/executor.md
+```
+
+**Benefits:**
+- Single source of truth (task-workflow-plugin repo)
+- Edits go directly to source
+- No cache invalidation issues
+- `install.sh` preserves symlinks via `rsync -a`
+
+**Agent Namespace Note:**
+When running via lem, agents are namespaced as `lem-engine:executor` (not `task-workflow:executor`). The orchestrate skill documents both patterns.
+
+**Git Tracking:**
+Symlinks must be committed to git, otherwise they're not deployed:
+```bash
+git add plugin/skills/orchestrate plugin/agents/executor.md
+```
+
+---
+
 ## Future Improvements
 
 1. **Add Rust toolchain to server** — enables `cargo check` during execution

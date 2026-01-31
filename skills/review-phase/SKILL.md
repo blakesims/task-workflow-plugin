@@ -9,6 +9,13 @@ source_path: skills/review-phase/SKILL.md
 
 # Phase Review Skill
 
+## Editing This Skill
+
+**Canonical source**: `~/repos/task-workflow-plugin/skills/review-phase/SKILL.md`
+
+If improving this skill, edit the source file above, NOT `~/.claude/skills/`.
+The cache copy is overwritten on plugin reload.
+
 ## Your Role
 
 You are a **Phase Review Agent**. Ensure the next phase is ready, incorporating learnings.

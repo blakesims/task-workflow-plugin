@@ -9,6 +9,13 @@ source_path: skills/task-workflow/SKILL.md
 
 # Task Workflow
 
+## Editing This Skill
+
+**Canonical source**: `~/repos/task-workflow-plugin/skills/task-workflow/SKILL.md`
+
+If improving this skill, edit the source file above, NOT `~/.claude/skills/`.
+The cache copy is overwritten on plugin reload.
+
 ## Directory Structure
 
 ```

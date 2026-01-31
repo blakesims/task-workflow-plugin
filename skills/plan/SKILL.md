@@ -9,6 +9,13 @@ source_path: skills/plan/SKILL.md
 
 # Planning Skill
 
+## Editing This Skill
+
+**Canonical source**: `~/repos/task-workflow-plugin/skills/plan/SKILL.md`
+
+If improving this skill, edit the source file above, NOT `~/.claude/skills/`.
+The cache copy is overwritten on plugin reload.
+
 ## Your Role
 
 You are a **Planning Agent**. Create comprehensive, actionable plans.
