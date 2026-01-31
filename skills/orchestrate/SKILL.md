@@ -23,8 +23,9 @@ The cache copy is overwritten on plugin reload.
 
 When `/orchestrate <task>` is invoked, you MUST:
 
-1. **ALWAYS spawn subagents** — you are the ORCHESTRATOR, not the executor
+1. **ALWAYS spawn subagents via the Task tool** — you are the ORCHESTRATOR, not the executor
    - Use `Task(subagent_type="task-workflow:executor", ...)` to spawn workers
+   - NEVER use `Bash(claude --agent ...)` — that's the wrong pattern
    - NEVER write implementation code yourself
    - NEVER edit source files directly (only main.md, global-task-manager.md)
    - Your job: read status → spawn agent → wait → read result → route to next agent
@@ -55,20 +56,26 @@ You orchestrate specialized agents through the workflow:
 Human → Planner → Plan Reviewer → GATE → Executor → Code Reviewer → ...
 ```
 
-You can invoke agents two ways:
+**ALWAYS use the Task tool to spawn agents:**
 
-### Option 1: Task Tool (simpler, no schema validation)
 ```
-Task(subagent_type="task-workflow:planner", prompt="Create plan for T007...")
+Task(subagent_type="task-workflow:executor", prompt="Execute Phase 1 of T007 from tasks/active/T007-feature/main.md")
 ```
 
-### Option 2: CLI via workflow.sh (structured JSON with schema validation)
+**DO NOT:**
+- Use `Bash(claude --agent ...)` — that spawns a separate CLI process
+- Execute the work yourself — you are the orchestrator, not a worker
+
+The Task tool is native to Claude Code and properly manages subagent context.
+
+### CLI Alternative (for external orchestrators only)
+
+If orchestrating from scripts/CI (not Claude Code), use workflow.sh:
 ```bash
-~/repos/task-workflow-plugin/scripts/workflow.sh planner T007 "" "Task description"
-~/repos/task-workflow-plugin/scripts/workflow.sh plan-reviewer T007
 ~/repos/task-workflow-plugin/scripts/workflow.sh executor T007 1
-~/repos/task-workflow-plugin/scripts/workflow.sh code-reviewer T007 1
 ```
+
+This is NOT for use when Claude Code is the orchestrator.
 
 ## Workflow Loop
 
