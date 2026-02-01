@@ -275,6 +275,28 @@ git add plugin/skills/orchestrate plugin/agents/executor.md
 
 ---
 
+### 15. Task Tool Not Available in Headless Agent Mode
+
+**Discovery:** 2026-02-01
+**Context:** Running orchestrator via `lem` which spawns agents
+
+**Problem:** The orchestrate skill says to use `Task(subagent_type="...")` but agents running via `claude --agent` in headless mode report they don't have this tool. They only see `TaskCreate/TaskGet/TaskUpdate/TaskList` (the task tracking tools).
+
+**Root Cause:** The `Task` tool for spawning subagents may only be available in interactive Claude Code sessions, not when running as a headless agent via `--agent` flag.
+
+**Workaround:** When `Task` tool is unavailable, fall back to CLI:
+```bash
+cd {project} && claude --plugin-dir ~/.claude/plugins/lem-engine \
+  --allowedTools "Read,Write,Edit,Glob,Grep,Bash" \
+  --agent lem-engine:executor -p "Execute Phase 1..."
+```
+
+**Impact:** This works but spawns a separate CLI process instead of native subagent. Less efficient but functional.
+
+**TODO:** Investigate if there's a way to enable Task tool in headless mode, or if this is a fundamental Claude Code limitation.
+
+---
+
 ## Future Improvements
 
 1. **Add Rust toolchain to server** — enables `cargo check` during execution
@@ -282,3 +304,4 @@ git add plugin/skills/orchestrate plugin/agents/executor.md
 3. **Parallel-safe phases** — if phases are independent, could run in parallel
 4. **Status synonyms** — make agents accept both `READY` and `APPROVED`
 5. **Progress streaming** — investigate PTY buffering or use `--verbose` flag
+6. **Task tool in headless mode** — investigate enabling native subagent spawning

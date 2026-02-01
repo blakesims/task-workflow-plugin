@@ -23,9 +23,9 @@ The cache copy is overwritten on plugin reload.
 
 When `/orchestrate <task>` is invoked, you MUST:
 
-1. **ALWAYS spawn subagents via the Task tool** — you are the ORCHESTRATOR, not the executor
-   - Use `Task(subagent_type="task-workflow:executor", ...)` to spawn workers
-   - NEVER use `Bash(claude --agent ...)` — that's the wrong pattern
+1. **ALWAYS spawn subagents** — you are the ORCHESTRATOR, not the executor
+   - PREFERRED: Use `Task(subagent_type="lem-engine:executor", ...)` if available
+   - FALLBACK: Use `Bash(claude --agent lem-engine:executor ...)` if Task tool unavailable
    - NEVER write implementation code yourself
    - NEVER edit source files directly (only main.md, global-task-manager.md)
    - Your job: read status → spawn agent → wait → read result → route to next agent
@@ -56,7 +56,7 @@ You orchestrate specialized agents through the workflow:
 Human → Planner → Plan Reviewer → GATE → Executor → Code Reviewer → ...
 ```
 
-**ALWAYS use the Task tool to spawn agents:**
+**Spawn agents using the Task tool:**
 
 ```
 Task(subagent_type="{plugin}:executor", prompt="Execute Phase 1 of T007 from tasks/active/T007-feature/main.md")
@@ -64,20 +64,24 @@ Task(subagent_type="{plugin}:executor", prompt="Execute Phase 1 of T007 from tas
 
 Where `{plugin}` is `lem-engine` (if running via lem) or `task-workflow` (if running standalone).
 
+**IMPORTANT:** The `Task` tool for spawning subagents is DIFFERENT from `TaskCreate/TaskUpdate/TaskList` (those are for tracking work items). Look for the tool named just `Task` with a `subagent_type` parameter.
+
 **DO NOT:**
-- Use `Bash(claude --agent ...)` — that spawns a separate CLI process
 - Execute the work yourself — you are the orchestrator, not a worker
 
-The Task tool is native to Claude Code and properly manages subagent context.
+### Fallback: CLI via Bash
 
-### CLI Alternative (for external orchestrators only)
+If the `Task` tool with `subagent_type` is not available (e.g., in headless `--agent` mode), use CLI:
 
-If orchestrating from scripts/CI (not Claude Code), use workflow.sh:
 ```bash
-~/repos/task-workflow-plugin/scripts/workflow.sh executor T007 1
+cd {project_dir} && claude \
+  --plugin-dir ~/.claude/plugins/lem-engine \
+  --allowedTools "Read,Write,Edit,Glob,Grep,Bash" \
+  --agent lem-engine:executor \
+  -p "Execute Phase 1 of T007..."
 ```
 
-This is NOT for use when Claude Code is the orchestrator.
+This is less ideal (spawns separate process) but works when Task tool is unavailable.
 
 ## Workflow Loop
 
