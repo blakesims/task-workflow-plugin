@@ -521,3 +521,46 @@ Review periodically to refine agents and schemas.
 6. **Human in the loop:** Blockers surface to human
 7. **Sequential execution:** One agent at a time (no conflicts)
 8. **Audit trail:** Supporting docs preserve details
+
+
+## Mermaid diagrams
+
+
+```mermaid
+flowchart TD
+    H["Human task"] --> O["Orchestrator"]
+    O --> P["Planner agent"]
+    P --> R["Plan review agent"]
+    R -->|READY| E["Executor agent"]
+    E --> C["Code review agent"]
+    C -->|PASS| Done["Complete"]
+    R -->|NEEDS_WORK| P
+    C -->|REVISE| E
+    R -->|NOT_READY| B["BLOCKED"]
+    C -->|FAIL| B
+    B --> O
+```
+
+```mermaid
+flowchart TD
+    H["Human provides task"] --> O["Orchestrator (coordinates + decides gates)"]
+
+    O --> GTM["Update index: global-task-manager.md"]
+    O --> S["Read Status in main.md"]
+
+    S -->|PLANNING| P["planner agent\nwrites Plan into main.md"]
+    P -->|sets Status = PLAN_REVIEW| PR["plan-reviewer agent\nwrites Plan Review + plan-review.md"]
+
+    PR -->|READY| X1["executor agent\nexecutes Phase N\nupdates Execution Log in main.md"]
+    X1 -->|sets Status = CODE_REVIEW| CR["code-reviewer agent\nwrites Code Review Log + code-review-phase-N.md"]
+
+    PR -->|NEEDS_WORK| P
+    CR -->|REVISE (<=3)| X1
+    CR -->|PASS| Next{"More phases?"}
+    Next -->|Yes| X1
+    Next -->|No| Done["COMPLETE\n(orchestrator moves task dir + final report)"]
+
+    PR -->|NOT_READY + questions| Block["BLOCKED\n(orchestrator reports open questions)"]
+    CR -->|FAIL| Block
+
+```
