@@ -93,7 +93,7 @@ The `main.md` file is the **single source of truth** for a task. All agents upda
 # T008: Feature Name
 
 ## Meta
-- **Status:** PLANNING | PLAN_REVIEW | READY | EXECUTING_PHASE_1 | CODE_REVIEW | COMPLETE | BLOCKED
+- **Status:** PLANNING | PLAN_REVIEW | READY | EXECUTING_PHASE_1 | CODE_REVIEW | MERGE_REVIEW | MERGE_READY | COMPLETE | BLOCKED
 - **Created:** 2026-01-28
 - **Last Updated:** 2026-01-28
 - **Blocked Reason:** {if BLOCKED}
@@ -137,6 +137,13 @@ The `main.md` file is the **single source of truth** for a task. All agents upda
 ### Phase 1
 - **Gate:** PASS | REVISE | FAIL
 → Details: code-review-phase-1.md
+
+---
+
+## Merge Review
+{Merge Reviewer fills this after all phases complete}
+- **Verdict:** MERGE_READY | NEEDS_WORK | BLOCKED
+→ Details: merge-review.md
 
 ---
 
@@ -211,7 +218,29 @@ Human: "Implement feature X"
               ▼
       More phases? ──→ Back to EXECUTE PHASE N+1
               │
-              └──→ Last phase? → COMPLETE
+              └──→ Last phase?
+                       │
+                       ▼
+┌─────────────────────────────────────┐
+│ 6. MERGE REVIEW                     │
+│    Agent: merge-reviewer            │
+│    Verifies: preconditions,         │
+│      integration, forbidden files   │
+│    Creates: merge-review.md         │
+│    Writes: executive summary        │
+│    Verdict: MERGE_READY /           │
+│      NEEDS_WORK / BLOCKED           │
+└─────────────────────────────────────┘
+              │
+      ┌───────┼───────┐
+      │       │       │
+  MERGE    NEEDS    BLOCKED
+  READY    WORK       │
+      │       │       └──→ BLOCKED (preconditions not met)
+      │       │
+      │       └──→ Back to executor
+      ▼
+  HUMAN APPROVAL ──→ COMPLETE
 ```
 
 ---
@@ -225,6 +254,7 @@ Human: "Implement feature X"
 | **executor** | execute, task-workflow | Implements phases |
 | **code-reviewer** | review-code, task-workflow | Reviews implementations |
 | **phase-reviewer** | review-phase, task-workflow | Bridges phases, applies learnings |
+| **merge-reviewer** | review-merge, task-workflow | Final merge gatekeeper, executive summary |
 
 ### What Each Agent Outputs
 
@@ -235,6 +265,7 @@ Human: "Implement feature X"
 | **executor** | Execution Log | — | CODE_REVIEW / BLOCKED |
 | **code-reviewer** | Code Review Log | code-review-phase-N.md | EXECUTING_PHASE_N+1 / COMPLETE / BLOCKED |
 | **phase-reviewer** | Plan (if learnings) | — | (unchanged) / BLOCKED |
+| **merge-reviewer** | Merge Review section | merge-review.md | MERGE_READY / EXECUTING_PHASE_N / BLOCKED |
 
 ---
 
@@ -310,7 +341,10 @@ PLAN_REVIEW                                            │
     ▼
 More phases? ──→ EXECUTING_PHASE_N+1 ──→ CODE_REVIEW ──→ ...
     │
-    └──→ COMPLETE
+    └──→ MERGE_REVIEW ──→ MERGE_READY ──→ (human approves) ──→ COMPLETE
+                │
+                ├──[NEEDS_WORK]──→ EXECUTING_PHASE_N (back to executor)
+                └──[BLOCKED]──→ BLOCKED
 ```
 
 ---
@@ -327,6 +361,8 @@ To decide what to do, read the **Status** field in main.md:
 | `EXECUTING_PHASE_N` | Check if executor running; if not, spawn for Phase N |
 | `CODE_REVIEW` | Spawn code-reviewer agent |
 | `BLOCKED` | Report to human with open questions/blocker |
+| `MERGE_REVIEW` | Spawn merge-reviewer agent |
+| `MERGE_READY` | Report to human for merge approval |
 | `COMPLETE` | Move to completed, update global-task-manager, report success |
 
 ---
@@ -396,6 +432,12 @@ exec pty:true workdir:PROJECT background:true \
 ```bash
 exec pty:true workdir:PROJECT background:true \
   command:"claude --plugin-dir ~/.claude/plugins/task-workflow --allowedTools 'Edit Read Write' --agent task-workflow:code-reviewer -p 'Review Phase 2 execution in tasks/active/T008-feature/main.md'"
+```
+
+### Spawn Merge Reviewer
+```bash
+exec pty:true workdir:PROJECT background:true \
+  command:"claude --plugin-dir ~/.claude/plugins/task-workflow --allowedTools 'Edit Read Write' --agent task-workflow:merge-reviewer -p 'Run merge review for tasks/active/T008-feature/main.md'"
 ```
 
 ### With Structured Output
@@ -558,7 +600,10 @@ flowchart TD
     CR -->|REVISE (<=3)| X1
     CR -->|PASS| Next{"More phases?"}
     Next -->|Yes| X1
-    Next -->|No| Done["COMPLETE\n(orchestrator moves task dir + final report)"]
+    Next -->|No| MR["merge-reviewer agent\nverifies preconditions, integration, executive summary"]
+    MR -->|MERGE_READY| Done["MERGE_READY\n(human approves merge)"]
+    MR -->|NEEDS_WORK| X1
+    MR -->|BLOCKED| Block
 
     PR -->|NOT_READY + questions| Block["BLOCKED\n(orchestrator reports open questions)"]
     CR -->|FAIL| Block

@@ -1,0 +1,81 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Merge Reviewer Output",
+  "description": "Structured output from the merge-reviewer agent",
+  "type": "object",
+  "required": ["checklist", "verdict", "status_set_to"],
+  "properties": {
+    "checklist": {
+      "type": "object",
+      "description": "Verification that all required steps were completed",
+      "required": [
+        "verified_preconditions",
+        "checked_integration",
+        "wrote_executive_summary",
+        "updated_main_md",
+        "created_merge_review_md",
+        "set_status"
+      ],
+      "properties": {
+        "verified_preconditions": { "type": "boolean" },
+        "checked_integration": { "type": "boolean" },
+        "wrote_executive_summary": { "type": "boolean" },
+        "updated_main_md": { "type": "boolean" },
+        "created_merge_review_md": { "type": "boolean" },
+        "set_status": { "type": "boolean" }
+      }
+    },
+    "verdict": {
+      "enum": ["MERGE_READY", "NEEDS_WORK", "BLOCKED"],
+      "description": "Merge verdict"
+    },
+    "status_set_to": {
+      "type": "string",
+      "description": "Status set in main.md (MERGE_READY, EXECUTING_PHASE_N for NEEDS_WORK, or BLOCKED)"
+    },
+    "preconditions": {
+      "type": "object",
+      "description": "Results of precondition checks",
+      "properties": {
+        "all_phases_complete": { "type": "boolean" },
+        "all_reviews_passed": { "type": "boolean" },
+        "no_open_questions": { "type": "boolean" },
+        "branch_ahead_of_main": { "type": "boolean" }
+      }
+    },
+    "integration": {
+      "type": "object",
+      "description": "Results of integration checks",
+      "properties": {
+        "rebase_clean": { "type": "boolean" },
+        "tests_passed": { "type": "boolean" },
+        "tests_total": { "type": "integer", "minimum": 0 },
+        "tests_failed": { "type": "integer", "minimum": 0 },
+        "forbidden_files_found": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "commits_ahead": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of commits the feature branch is ahead of main"
+    },
+    "files_changed": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Number of files changed relative to main"
+    },
+    "post_merge_steps": {
+      "type": "array",
+      "description": "Required post-merge actions",
+      "items": { "type": "string" }
+    },
+    "executive_summary": {
+      "type": "string",
+      "description": "CEO-readable summary of what was built and what to watch for"
+    },
+    "summary": {
+      "type": "string",
+      "description": "Brief technical summary of the review"
+    }
+  }
+}

@@ -40,7 +40,7 @@ The `main.md` file is the **single source of truth** for a task. All agents upda
 # T{NNN}: {Task Title}
 
 ## Meta
-- **Status:** PLANNING | PLAN_REVIEW | READY | EXECUTING_PHASE_{N} | CODE_REVIEW | COMPLETE | BLOCKED
+- **Status:** PLANNING | PLAN_REVIEW | READY | EXECUTING_PHASE_{N} | CODE_REVIEW | MERGE_REVIEW | MERGE_READY | COMPLETE | BLOCKED
 - **Created:** {date}
 - **Last Updated:** {date}
 - **Blocked Reason:** {if BLOCKED, why}
@@ -131,6 +131,19 @@ The `main.md` file is the **single source of truth** for a task. All agents upda
 
 ---
 
+## Merge Review
+- **Verdict:** MERGE_READY | NEEDS_WORK | BLOCKED
+- **Reviewed:** {date}
+- **Branch:** {branch-name}
+- **Summary:** {assessment}
+
+### Executive Summary
+{CEO-readable summary}
+
+-> Details: `merge-review.md`
+
+---
+
 ## Completion
 - **Completed:** {date}
 - **Summary:** {what was delivered}
@@ -146,6 +159,7 @@ The `main.md` file is the **single source of truth** for a task. All agents upda
 | Executor | Plan (current phase) | Execution Log section, Status | — |
 | Code Reviewer | Execution Log, git diff | Code Review Log section, Status | code-review-phase-N.md |
 | Phase Reviewer | Code Review Log, next phase | May update Plan with learnings | — |
+| Merge Reviewer | All sections | Merge Review section, Status | merge-review.md |
 
 ## Status Flow
 
@@ -158,7 +172,7 @@ PLANNING → PLAN_REVIEW → READY → EXECUTING_PHASE_1 → CODE_REVIEW
      
 After CODE_REVIEW PASS:
   → More phases? → EXECUTING_PHASE_N
-  → Last phase? → COMPLETE
+  → Last phase? → MERGE_REVIEW → MERGE_READY → (human approves) → COMPLETE
 ```
 
 ## Orchestrator Checks Status
@@ -170,4 +184,6 @@ To know what to do, read the **Status** field:
 - `EXECUTING_PHASE_N` → executor working (or spawn if not running)
 - `CODE_REVIEW` → spawn code reviewer
 - `BLOCKED` → report to human with open questions
+- `MERGE_REVIEW` → spawn merge reviewer
+- `MERGE_READY` → report to human for merge approval
 - `COMPLETE` → report success

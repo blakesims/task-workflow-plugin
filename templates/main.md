@@ -83,6 +83,24 @@
 
 ---
 
+## Merge Review
+- **Verdict:** —
+- **Reviewed:** —
+- **Branch:** —
+- **Commits:** —
+- **Tests:** —
+- **Summary:** —
+
+### Executive Summary
+—
+
+### Post-Merge Steps
+—
+
+-> Details: `merge-review.md`
+
+---
+
 ## Completion
 - **Completed:** —
 - **Summary:** —

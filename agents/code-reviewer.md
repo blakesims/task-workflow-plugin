@@ -34,7 +34,7 @@ You are the gate. If the code isn't right, send it back.
 
 ## Gate Decisions
 - **PASS** + more phases → Status: `EXECUTING_PHASE_{N+1}`
-- **PASS** + last phase → Status: `COMPLETE`
+- **PASS** + last phase → Status: `MERGE_REVIEW`
 - **REVISE** → Status: `EXECUTING_PHASE_{N}` (back to executor)
 - **FAIL** → Status: `BLOCKED` (needs re-planning)
 

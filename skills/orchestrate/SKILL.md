@@ -83,9 +83,9 @@ The user invoked `/orchestrate` because they want fully autonomous multi-agent e
 
 Read these files to understand the system:
 
-1. **Architecture**: `~/repos/task-workflow-plugin/docs/architecture.md`
-2. **CLI Reference**: `~/repos/task-workflow-plugin/docs/cli-reference.md`
-3. **Lessons Learned**: `~/repos/task-workflow-plugin/docs/lessons-learned.md`
+1. **Architecture**: `~/.claude/plugins/task-workflow/docs/architecture.md`
+2. **CLI Reference**: `~/.claude/plugins/task-workflow/docs/cli-reference.md`
+3. **Lessons Learned**: `~/.claude/plugins/task-workflow/docs/lessons-learned.md`
 
 ## Your Role
 
@@ -98,7 +98,7 @@ Human → Planner → Plan Reviewer → GATE → Executor → Code Reviewer → 
 **Spawn agents using the Task tool:**
 
 ```
-Task(subagent_type="{plugin}:executor", prompt="Execute Phase 1 of T007 from tasks/active/T007-feature/main.md")
+Task(subagent_type="{plugin}:executor", prompt="Execute Phase 1 of T007 from tasks/active/T007-feature/main.md", run_in_background=true)
 ```
 
 Where `{plugin}` is `lem-engine` (if running via lem) or `task-workflow` (if running standalone).
@@ -131,10 +131,40 @@ This is less ideal (spawns separate process) but works when Task tool is unavail
    - `READY` → **move planning → active**, then executor (phase 1)
    - `EXECUTING_PHASE_N` → executor (phase N)
    - `CODE_REVIEW` → code-reviewer
+   - `MERGE_REVIEW` → merge-reviewer
+   - `MERGE_READY` → report to human for merge approval
    - `BLOCKED` → report to human
    - `COMPLETE` → **move active → completed**, update global-task-manager, done
-3. **Parse agent output** (gate decision)
-4. **Route to next step** or report blocker
+3. **Read the `<task-notification>`** that arrives when agent finishes (~1-2k tokens)
+4. **Verify via repo state** — `git log --oneline -3`, `pytest -q`, read files
+5. **Route to next step** or report blocker
+
+### CRITICAL: Two Rules for Agent Communication
+
+**Rule 1: Always `run_in_background=true` when spawning agents.**
+
+Convention. The parent stays responsive. A `<task-notification>` arrives automatically when the agent finishes (~1-2k tokens, written by the agent, contains status + summary + usage stats).
+
+**Rule 2: Never use `TaskOutput` on agent task IDs.**
+
+`TaskOutput` returns the agent's raw JSONL session transcript (15-50k tokens) — every tool call, file read, and edit. Both `block=true` and `block=false` return the same raw transcript. There is no summary mode.
+
+`TaskOutput` is correct for background **bash commands** (e.g., reading pytest stdout). Only avoid it for agent task IDs.
+
+**Correct pattern:**
+```
+Task(subagent_type="task-workflow:executor", prompt="...", run_in_background=true)
+  ... agent runs autonomously ...
+<task-notification> arrives (status + summary, ~1-2k tokens)
+  ... verify: git log, pytest, read files ...
+Task(subagent_type="task-workflow:code-reviewer", prompt="...", run_in_background=true)
+```
+
+**Wrong pattern (dumps 15-50k raw JSONL into context):**
+```
+Task(subagent_type="task-workflow:executor", prompt="...", run_in_background=true)
+TaskOutput(task_id="...", block=true)  ← raw transcript, destroys context
+```
 
 ## Directory Transitions (YOUR responsibility)
 

@@ -91,7 +91,7 @@ For each acceptance criterion:
 
 Update Status based on gate:
 - **PASS + more phases:** `Status: EXECUTING_PHASE_{N+1}`
-- **PASS + last phase:** `Status: COMPLETE`
+- **PASS + last phase:** `Status: MERGE_REVIEW`
 - **REVISE:** `Status: EXECUTING_PHASE_{N}` (back to executor)
 - **FAIL:** `Status: BLOCKED`, `Blocked Reason: Code review failed, needs re-planning`
 
