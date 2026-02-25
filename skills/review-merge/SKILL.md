@@ -105,6 +105,40 @@ Search for debug artifacts:
 git diff main..HEAD | grep -E '^\+.*(console\.log|debugger|binding\.pry|print\(|TODO|FIXME|HACK|XXX)'
 ```
 
+#### 2d. Deploy Impact Scan
+
+Scan the diff for changes that require production actions beyond code deployment. This catches the gap between "merged to main" and "working in production".
+
+```bash
+# Check for new alembic migrations
+git diff --name-only main..HEAD -- '**/alembic/versions/*.py'
+
+# Check for new/modified scripts (may need manual execution on prod)
+git diff --name-only main..HEAD -- '**/scripts/*.py'
+
+# Check for infrastructure changes
+git diff --name-only main..HEAD -- '**/fly.toml' '**/Dockerfile' '**/docker-compose*.yml' '**/.github/workflows/*'
+
+# Check for new env var / secret references added in this branch
+git diff main..HEAD | grep -E '^\+.*os\.(environ|getenv)\[?' | grep -v '^\+\+\+'
+git diff main..HEAD | grep -E '^\+.*FLY_|SECRET|API_KEY|DATABASE_URL' | grep -v '^\+\+\+'
+```
+
+Build a **Deploy Impact** table:
+
+| Signal | Found | Action Required |
+|--------|-------|-----------------|
+| New alembic migrations | {count or none} | Auto-applied via `release_command` in fly.toml (verify it exists) |
+| New/modified scripts | {list or none} | Review if any need manual execution on production |
+| fly.toml / Dockerfile changes | {list or none} | Verify infrastructure changes are intentional |
+| New env vars / secrets | {list or none} | Must be set via `fly secrets set` BEFORE deploy |
+
+**Severity rules for deploy impact:**
+- New env vars/secrets referenced but not documented in post-merge steps → **NEEDS_WORK**
+- New migrations without `release_command` in fly.toml → **NEEDS_WORK** (flag as deploy risk)
+- New scripts in `scripts/` → note in post-merge steps (does not block)
+- fly.toml / Dockerfile changes → note in post-merge steps (does not block unless destructive)
+
 ### Step 3: Executive Summary
 
 This is the KEY output. Write it for a non-technical CEO (Blake's "sign-off" use case).
@@ -246,6 +280,14 @@ Update Status:
 | TODO/FIXME (new) | {count} | {list} |
 | Large binaries | {count} | {list} |
 
+### Deploy Impact
+| Signal | Found | Action Required |
+|--------|-------|-----------------|
+| New alembic migrations | {count or none} | {auto via release_command / manual needed} |
+| New/modified scripts | {list or none} | {review for manual prod execution} |
+| Infrastructure changes | {list or none} | {verify intentional} |
+| New env vars / secrets | {list or none} | {must set before deploy} |
+
 ---
 
 ## Files Changed (main..HEAD)
@@ -283,12 +325,16 @@ Update Status:
 - Merge conflicts
 - Committed secrets/credentials
 - Debug prints left in production code
+- New env vars/secrets referenced in code but not documented in post-merge steps
+- New alembic migrations without `release_command` in fly.toml (deploy will crash production)
 
 **Noted but does not block (MERGE_READY with caveats):**
 - Minor TODO comments
 - Style issues
 - Non-critical test warnings
 - Documentation gaps
+- New scripts that may need manual production execution
+- Infrastructure config changes (fly.toml, Dockerfile)
 
 **Blocks entirely (BLOCKED):**
 - Incomplete phases
