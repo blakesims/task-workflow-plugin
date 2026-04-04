@@ -1439,6 +1439,7 @@ export function renderGraphWidget(
 				}
 			}
 			sections.push({ kind: "loop", loopName: item.name, nodeNames: loopNodes });
+			currentNodes = [];
 		}
 	}
 	if (currentNodes.length > 0) {
@@ -1450,6 +1451,8 @@ export function renderGraphWidget(
 		const cols = Math.min(maxCardsPerRow, names.length);
 		const totalArrowWidth = arrowWidth * (cols - 1);
 		const colWidth = Math.max(minCardWidth, Math.floor((availWidth - totalArrowWidth) / cols));
+		const actualRowWidth = cols * colWidth + totalArrowWidth;
+		const rowPad = Math.max(0, availWidth - actualRowWidth);
 		const arrowRow = 2; // middle of 5-line card (0-indexed)
 		const rowLines: string[] = [];
 
@@ -1469,7 +1472,7 @@ export function renderGraphWidget(
 			const cardHeight = cards[0].length;
 			for (let line = 0; line < cardHeight; line++) {
 				let row = cards[0][line];
-				for (let c = 1; c < rowNames.length; c++) {
+				for (let c = 1; c < cards.length; c++) {
 					if (line === arrowRow) {
 						row += theme.fg("dim", " ──▶ ");
 					} else {
@@ -1477,7 +1480,7 @@ export function renderGraphWidget(
 					}
 					row += cards[c][line];
 				}
-				rowLines.push(row);
+				rowLines.push(row + " ".repeat(rowPad));
 			}
 
 			// If there are more chunks, add a vertical arrow between rows

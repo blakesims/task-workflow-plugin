@@ -589,6 +589,16 @@ console.log("\n== Phase 4: renderGraphWidget() ==");
 	assert(joined.includes("review_loop"), "loop section shows loop name");
 	assert(joined.includes("2/3"), "loop section shows cycle counter (2/3)");
 	assert(joined.includes("until loop"), "loop section shows loop type");
+
+	// Verify loop nodes are NOT rendered twice (once in loop container, once as bare cards)
+	const investigatorBorders = joined.split("investigator").length - 1;
+	const reviewerBorders = joined.split("reviewer").length - 1;
+	// Each node name should appear exactly once (inside the loop container card)
+	// Allow for the loop name "review_loop" containing "reviewer" substring — count bordered card headers only
+	const cardHeaders = lines.filter(l => l.includes("┌─"));
+	assert(cardHeaders.length === 2, `loop nodes rendered exactly once: expected 2 card headers, got ${cardHeaders.length}`);
+	passed++;
+	console.log("  ✓ loop nodes not duplicated outside loop container");
 }
 
 // Test renderGraphWidget with empty graph
