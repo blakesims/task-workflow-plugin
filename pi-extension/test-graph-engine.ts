@@ -85,6 +85,63 @@ const r3 = validateGraph(graphBadTemplate, __dirname);
 assert(!r3.valid, "invalid when template references non-existent node");
 assert(r3.errors.some((e) => e.includes("nonexistent")), "error mentions non-existent node in template");
 
+// Test: deep dot-path template references validated
+console.log("\n== AC3: Deep dot-path template validation ==");
+const graphDeepPath = parseGraph(yamlContent);
+graphDeepPath.human_gates![0].display = ["{{bogus.output.deep.nested.path}}"];
+const r4 = validateGraph(graphDeepPath, __dirname);
+assert(!r4.valid, "invalid when deep dot-path references non-existent node");
+assert(r4.errors.some((e) => e.includes("bogus")), "error mentions bogus node in deep dot-path");
+
+// Test: valid deep dot-path passes (investigation-grinder uses them in human_gates)
+const graphValidDeep = parseGraph(yamlContent);
+const r4b = validateGraph(graphValidDeep, __dirname);
+assert(r4b.valid, `valid deep dot-paths accepted (errors: ${r4b.errors.join("; ")})`);
+
+// Test: {{#if}} conditional references validated
+console.log("\n== AC3: {{#if}} conditional validation ==");
+const graphBadIf = parseGraph(yamlContent);
+graphBadIf.nodes.investigator.prompt = "{{#if phantom.output.field}}show{{/if}}";
+const r5 = validateGraph(graphBadIf, __dirname);
+assert(!r5.valid, "invalid when {{#if}} references non-existent node");
+assert(r5.errors.some((e) => e.includes("phantom") && e.includes("conditional")), "error mentions phantom node in conditional");
+
+// Test: valid {{#if}} passes (investigator prompt uses {{#if reviewer.output...}})
+const graphValidIf = parseGraph(yamlContent);
+const r5b = validateGraph(graphValidIf, __dirname);
+assert(r5b.valid, `valid {{#if}} references accepted (errors: ${r5b.errors.join("; ")})`);
+
+// Test: loop mutual exclusivity — both until and for_each
+console.log("\n== AC3: Loop mutual exclusivity ==");
+const graphBothLoop = parseGraph(yamlContent);
+graphBothLoop.loops!["investigation_loop"].for_each = "investigator.output.items";
+const r6 = validateGraph(graphBothLoop, __dirname);
+assert(!r6.valid, "invalid when loop has both until and for_each");
+assert(r6.errors.some((e) => e.includes("both")), "error mentions both until and for_each");
+
+// Test: loop with neither until nor for_each
+const graphNoLoop = parseGraph(yamlContent);
+delete graphNoLoop.loops!["investigation_loop"].until;
+const r7 = validateGraph(graphNoLoop, __dirname);
+assert(!r7.valid, "invalid when loop has neither until nor for_each");
+assert(r7.errors.some((e) => e.includes("neither")), "error mentions neither until nor for_each");
+
+// Test: on_max with invalid value
+console.log("\n== AC3: on_max validation ==");
+const graphBadOnMax = parseGraph(yamlContent);
+graphBadOnMax.loops!["investigation_loop"].on_max = "TYPOSTATE";
+const r8 = validateGraph(graphBadOnMax, __dirname);
+assert(!r8.valid, "invalid when on_max is not a known terminal or node");
+assert(r8.errors.some((e) => e.includes("TYPOSTATE")), "error mentions invalid on_max value");
+
+// Test: HUMAN_GATE edge without matching gate definition
+console.log("\n== AC3: HUMAN_GATE edge correlation ==");
+const graphNoGate = parseGraph(yamlContent);
+graphNoGate.human_gates = [];
+const r9 = validateGraph(graphNoGate, __dirname);
+assert(!r9.valid, "invalid when HUMAN_GATE edge has no matching gate definition");
+assert(r9.errors.some((e) => e.includes("no corresponding human gate")), "error mentions missing gate definition");
+
 // Test: YAML syntax error
 console.log("\n== Extra: YAML syntax error handling ==");
 let caughtYamlError = false;

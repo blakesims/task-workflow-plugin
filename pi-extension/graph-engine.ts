@@ -256,11 +256,24 @@ export function validateGraph(graph: GraphDef, baseDir: string): ValidationResul
 		}
 	}
 
-	// (d) Loops have max_cycles set
+	// (d) Loops have max_cycles set and are either until OR for_each (not both, not neither)
 	if (graph.loops) {
 		for (const [name, loop] of Object.entries(graph.loops)) {
 			if (!loop.max_cycles || loop.max_cycles <= 0) {
 				errors.push(`Loop "${name}" has no max_cycles set (unbounded loop)`);
+			}
+			if (loop.until && loop.for_each) {
+				errors.push(`Loop "${name}" has both "until" and "for_each" — must have one or the other`);
+			}
+			if (!loop.until && !loop.for_each) {
+				errors.push(`Loop "${name}" has neither "until" nor "for_each" — must have one`);
+			}
+			// Validate on_max references a known terminal or node
+			if (loop.on_max) {
+				const knownTerminals = new Set(["DONE", "BLOCKED", "ERROR"]);
+				if (!knownTerminals.has(loop.on_max) && !allNames.has(loop.on_max)) {
+					errors.push(`Loop "${name}" on_max value "${loop.on_max}" is not a known terminal (DONE, BLOCKED, ERROR) or node`);
+				}
 			}
 		}
 	}
@@ -283,13 +296,24 @@ export function validateGraph(graph: GraphDef, baseDir: string): ValidationResul
 		}
 	}
 
-	const templateVarRegex = /\{\{(\w+)\.output\.\w+\}\}/g;
+	// Match deep dot-paths: {{node.output.field}}, {{node.output.field.subfield}}, etc.
+	const templateVarRegex = /\{\{(\w+)\.output(?:\.\w+)+\}\}/g;
+	// Also match node references inside {{#if node.output.field}} conditionals
+	const templateIfRegex = /\{\{#if\s+(\w+)\.output(?:\.\w+)+\}\}/g;
 	for (const { source, template } of templateStrings) {
 		let match;
+		templateVarRegex.lastIndex = 0;
 		while ((match = templateVarRegex.exec(template)) !== null) {
 			const referencedNode = match[1];
 			if (referencedNode !== "input" && !nodeNames.has(referencedNode)) {
 				errors.push(`Template in ${source} references non-existent node: "${referencedNode}"`);
+			}
+		}
+		templateIfRegex.lastIndex = 0;
+		while ((match = templateIfRegex.exec(template)) !== null) {
+			const referencedNode = match[1];
+			if (referencedNode !== "input" && !nodeNames.has(referencedNode)) {
+				errors.push(`Template in ${source} references non-existent node in conditional: "${referencedNode}"`);
 			}
 		}
 	}
@@ -307,12 +331,21 @@ export function validateGraph(graph: GraphDef, baseDir: string): ValidationResul
 		}
 	}
 
-	// (g) Human gates reference valid nodes in `after`
+	// (g) Human gates reference valid nodes in `after` + correlate with HUMAN_GATE edges
 	if (graph.human_gates) {
 		for (const gate of graph.human_gates) {
 			if (!allNames.has(gate.after)) {
 				errors.push(`Human gate "${gate.title}" references unknown node/loop in "after": "${gate.after}"`);
 			}
+		}
+	}
+
+	// Every edge targeting HUMAN_GATE should have a corresponding gate definition
+	const humanGateEdges = graph.edges.filter((e) => e.to === "HUMAN_GATE");
+	for (const edge of humanGateEdges) {
+		const hasMatchingGate = graph.human_gates?.some((g) => g.after === edge.from);
+		if (!hasMatchingGate) {
+			errors.push(`Edge from "${edge.from}" to HUMAN_GATE has no corresponding human gate definition with after: "${edge.from}"`);
 		}
 	}
 
