@@ -6,7 +6,8 @@
 import { readFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
-import { parseGraph, validateGraph } from "./graph-engine.js";
+import { parseGraph, validateGraph, resolveTemplate } from "./graph-engine.js";
+import type { TemplateContext } from "./graph-engine.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -151,6 +152,121 @@ try {
 	caughtYamlError = e.message.includes("YAML syntax error");
 }
 assert(caughtYamlError, "parseGraph throws on malformed YAML");
+
+// ── Phase 2 AC1: Basic input interpolation ──────────────────────────────────
+
+console.log("\n== Phase 2 AC1: resolveTemplate basic ==");
+
+assert(
+	resolveTemplate("Investigate: {{input}}", { input: "memory leak" }) === "Investigate: memory leak",
+	"{{input}} resolves to context.input",
+);
+
+assert(
+	resolveTemplate("No vars here", {}) === "No vars here",
+	"template without vars passes through unchanged",
+);
+
+assert(
+	resolveTemplate("A {{input}} B {{input}} C", { input: "X" }) === "A X B X C",
+	"multiple {{input}} occurrences replaced",
+);
+
+// ── Phase 2 AC2: Conditional blocks ─────────────────────────────────────────
+
+console.log("\n== Phase 2 AC2: resolveTemplate conditionals ==");
+
+assert(
+	resolveTemplate("{{#if challenges}}Challenges: {{challenges}}{{/if}}", { challenges: "" }) === "",
+	"empty string is falsy — conditional block removed",
+);
+
+assert(
+	resolveTemplate("{{#if challenges}}Challenges: {{challenges}}{{/if}}", { challenges: "OOM" }) === "Challenges: OOM",
+	"non-empty string is truthy — conditional block kept",
+);
+
+assert(
+	resolveTemplate("before {{#if missing}}hidden{{/if}} after", {}) === "before  after",
+	"undefined variable is falsy — conditional block removed",
+);
+
+assert(
+	resolveTemplate("{{#if items}}has items{{/if}}", { items: [] as any }) === "",
+	"empty array is falsy — conditional block removed",
+);
+
+// ── Phase 2 AC3: Dot-path traversal through nested outputs ──────────────────
+
+console.log("\n== Phase 2 AC3: resolveTemplate dot-path ==");
+
+const dotPathContext: TemplateContext = {
+	input: "test",
+	outputs: {
+		reviewer: {
+			decision: "PASS",
+			human_executive_summary: {
+				bottom_line: "All clear",
+			},
+		},
+	},
+};
+
+assert(
+	resolveTemplate("{{reviewer.output.decision}}", dotPathContext) === "PASS",
+	"{{reviewer.output.decision}} resolves via outputs.reviewer.decision",
+);
+
+assert(
+	resolveTemplate("{{reviewer.output.human_executive_summary.bottom_line}}", dotPathContext) === "All clear",
+	"deep dot-path: reviewer.output.human_executive_summary.bottom_line",
+);
+
+// Full output (object) should be JSON.stringified
+const fullOutput = resolveTemplate("{{reviewer.output}}", dotPathContext);
+assert(
+	fullOutput.includes('"decision":"PASS"') || fullOutput.includes('"decision": "PASS"'),
+	"{{reviewer.output}} returns JSON stringified full output",
+);
+
+// Missing node output returns empty string
+assert(
+	resolveTemplate("{{nonexistent.output.field}}", dotPathContext) === "",
+	"missing node output resolves to empty string",
+);
+
+// ── Phase 2: Loop variable interpolation ────────────────────────────────────
+
+console.log("\n== Phase 2: Loop variable resolution ==");
+
+const loopContext: TemplateContext = {
+	input: "test",
+	outputs: {},
+	loopVars: { current_phase: "Phase 1: Setup" },
+};
+
+assert(
+	resolveTemplate("Working on: {{current_phase}}", loopContext) === "Working on: Phase 1: Setup",
+	"{{loop_var}} resolves from loopVars",
+);
+
+// ── Phase 2: Conditional with dot-path ──────────────────────────────────────
+
+console.log("\n== Phase 2: Conditional with dot-path ==");
+
+assert(
+	resolveTemplate("{{#if reviewer.output.decision}}Decision: {{reviewer.output.decision}}{{/if}}", dotPathContext) === "Decision: PASS",
+	"{{#if node.output.field}} works with truthy dot-path",
+);
+
+const emptyOutputCtx: TemplateContext = {
+	outputs: { reviewer: { decision: "" } },
+};
+
+assert(
+	resolveTemplate("{{#if reviewer.output.decision}}Decision: {{reviewer.output.decision}}{{/if}}", emptyOutputCtx) === "",
+	"{{#if node.output.field}} with empty string is falsy",
+);
 
 // ── Summary ──────────────────────────────────────────────────────────────────
 

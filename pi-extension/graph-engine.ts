@@ -1,7 +1,9 @@
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { parse as parseYaml } from "yaml";
-import { existsSync } from "fs";
-import { join } from "path";
+import { existsSync, readFileSync } from "fs";
+import { spawn } from "child_process";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
 
 // ── Phase 1: Types ──────────────────────────────────────────────────────────
 
@@ -354,6 +356,235 @@ export function validateGraph(graph: GraphDef, baseDir: string): ValidationResul
 		errors,
 		warnings,
 	};
+}
+
+// ── Phase 2: Template Interpolation ─────────────────────────────────────────
+
+/**
+ * Template context shape used at runtime.
+ * - input: the original user input string
+ * - outputs: { nodeName: { ...structured output } }
+ * - loopVars: { varName: value } for current loop iteration
+ * Any top-level key can also be accessed directly for convenience.
+ */
+export interface TemplateContext {
+	input?: string;
+	outputs?: Record<string, Record<string, any>>;
+	loopVars?: Record<string, any>;
+	[key: string]: any;
+}
+
+/**
+ * Traverse a nested object by dot-separated path.
+ * Returns undefined if any segment is missing.
+ */
+function getByDotPath(obj: any, path: string): any {
+	const parts = path.split(".");
+	let current = obj;
+	for (const part of parts) {
+		if (current == null || typeof current !== "object") return undefined;
+		current = current[part];
+	}
+	return current;
+}
+
+/**
+ * Resolve a template string against a context object.
+ *
+ * Supported patterns:
+ *   {{input}}                           — context.input
+ *   {{nodeName.output}}                 — JSON.stringify(context.outputs[nodeName])
+ *   {{nodeName.output.field.sub}}       — dot-path into context.outputs[nodeName]
+ *   {{loop_var}}                        — context.loopVars[loop_var] or context[loop_var]
+ *   {{#if varName}}...{{/if}}           — conditional block (truthy = present and non-empty)
+ */
+export function resolveTemplate(template: string, context: TemplateContext): string {
+	let result = template;
+
+	// 1. Process {{#if varName}}...{{/if}} blocks (non-greedy, no nesting)
+	result = result.replace(/\{\{#if\s+([^}]+)\}\}([\s\S]*?)\{\{\/if\}\}/g, (_match, varExpr: string, body: string) => {
+		const value = resolveVar(varExpr.trim(), context);
+		// Truthy: present, non-null, non-empty-string, non-empty-array
+		if (value === undefined || value === null || value === "" || (Array.isArray(value) && value.length === 0)) {
+			return "";
+		}
+		return body;
+	});
+
+	// 2. Process {{variable}} interpolations
+	result = result.replace(/\{\{([^#/}][^}]*?)\}\}/g, (_match, varExpr: string) => {
+		const value = resolveVar(varExpr.trim(), context);
+		if (value === undefined || value === null) return "";
+		if (typeof value === "object") return JSON.stringify(value);
+		return String(value);
+	});
+
+	return result;
+}
+
+/**
+ * Resolve a single variable expression against the context.
+ *
+ * Resolution order for "nodeName.output.field":
+ *   1. context.outputs[nodeName] -> traverse .field
+ * Resolution for "nodeName.output" (no further path):
+ *   1. context.outputs[nodeName] (full object)
+ * Resolution for simple "varName":
+ *   1. context[varName] (e.g., context.input)
+ *   2. context.loopVars[varName]
+ */
+function resolveVar(expr: string, context: TemplateContext): any {
+	// Check for nodeName.output or nodeName.output.field pattern
+	const outputMatch = expr.match(/^(\w+)\.output(?:\.(.+))?$/);
+	if (outputMatch) {
+		const [, nodeName, fieldPath] = outputMatch;
+		const nodeOutput = context.outputs?.[nodeName];
+		if (nodeOutput === undefined) return undefined;
+		if (!fieldPath) return nodeOutput; // {{nodeName.output}} — full object
+		return getByDotPath(nodeOutput, fieldPath);
+	}
+
+	// Simple variable: check direct context, then loopVars
+	if (context[expr] !== undefined) return context[expr];
+	if (context.loopVars?.[expr] !== undefined) return context.loopVars[expr];
+	return undefined;
+}
+
+// ── Phase 2: Worker Spawner ────────────────────────────────────────────────
+
+const __filename_ge = fileURLToPath(import.meta.url);
+const __dirname_ge = dirname(__filename_ge);
+const WORKER_PATH = join(__dirname_ge, "test-worker.ts");
+
+/**
+ * Spawn a headless Pi worker for a graph node.
+ *
+ * Reads persona .md and schema .json from disk, passes them via env vars
+ * to test-worker.ts. Parses JSONL stdout for tool_execution_start events
+ * with toolName === "submit_results" and extracts args.
+ *
+ * @param nodeDef   - The node definition from the graph
+ * @param resolvedPrompt - The prompt after template interpolation
+ * @param baseDir   - Base directory for resolving persona/schema paths
+ * @param model     - Optional model override
+ * @param timeout   - Timeout in ms (default 120000)
+ * @returns Structured JSON args from the worker's tool call
+ */
+export function spawnGraphNode(
+	nodeDef: NodeDef,
+	resolvedPrompt: string,
+	baseDir: string,
+	model?: string,
+	timeout: number = 120_000,
+): Promise<Record<string, any>> {
+	return new Promise((resolve, reject) => {
+		// Read persona and schema from disk
+		const personaContent = readFileSync(join(baseDir, nodeDef.persona), "utf-8");
+		const schemaContent = readFileSync(join(baseDir, nodeDef.schema), "utf-8");
+
+		const toolName = "submit_results";
+		const toolDesc = "Submit your structured results.";
+
+		// Build spawn args
+		const args: string[] = [
+			"-p",
+			"--mode", "json",
+			"--no-extensions",
+			"-e", WORKER_PATH,
+			"--no-session",
+		];
+
+		// Task 2.3: tools field handling
+		if (nodeDef.tools) {
+			args.push("--tools", nodeDef.tools);
+		} else {
+			args.push("--no-tools");
+		}
+
+		args.push("--thinking", "off");
+
+		// Optional model override
+		if (model) {
+			args.push("--model", model);
+		}
+
+		// The prompt is the final positional argument
+		args.push(resolvedPrompt);
+
+		const proc = spawn("pi", args, {
+			stdio: ["ignore", "pipe", "pipe"],
+			env: {
+				...process.env,
+				WORKER_SYSTEM_PROMPT: personaContent,
+				WORKER_TOOL_NAME: toolName,
+				WORKER_TOOL_DESC: toolDesc,
+				WORKER_SCHEMA: schemaContent,
+			},
+		});
+
+		let toolArgs: any = null;
+		let buffer = "";
+		let stderrText = "";
+		let timedOut = false;
+
+		// Configurable timeout
+		const timer = setTimeout(() => {
+			timedOut = true;
+			proc.kill("SIGTERM");
+		}, timeout);
+
+		proc.stdout!.setEncoding("utf-8");
+		proc.stdout!.on("data", (chunk: string) => {
+			buffer += chunk;
+			const lines = buffer.split("\n");
+			buffer = lines.pop() || "";
+			for (const line of lines) {
+				if (!line.trim()) continue;
+				try {
+					const event = JSON.parse(line);
+					if (event.type === "tool_execution_start" && event.toolName === toolName) {
+						toolArgs = event.args;
+					}
+				} catch {}
+			}
+		});
+
+		proc.stderr!.setEncoding("utf-8");
+		proc.stderr!.on("data", (chunk: string) => {
+			stderrText += chunk;
+		});
+
+		proc.on("close", (code) => {
+			clearTimeout(timer);
+
+			// Process remaining buffer
+			if (buffer.trim()) {
+				try {
+					const event = JSON.parse(buffer);
+					if (event.type === "tool_execution_start" && event.toolName === toolName) {
+						toolArgs = event.args;
+					}
+				} catch {}
+			}
+
+			if (timedOut) {
+				reject(new Error(`Worker timed out after ${timeout / 1000}s`));
+			} else if (toolArgs) {
+				resolve(toolArgs);
+			} else {
+				reject(
+					new Error(
+						`Worker exited code ${code} without calling "${toolName}". Stderr: ${stderrText.slice(0, 500)}`,
+					),
+				);
+			}
+		});
+
+		proc.on("error", (err) => {
+			clearTimeout(timer);
+			reject(err);
+		});
+	});
 }
 
 // ── Extension Entry Point (Phase 4 — placeholder) ──────────────────────────
