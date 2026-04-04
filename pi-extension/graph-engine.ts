@@ -813,6 +813,7 @@ async function executeUntilLoop(
 					output,
 					startedAt: state.nodeStates[nodeName].startedAt,
 					completedAt: Date.now(),
+					lastWork: state.nodeStates[nodeName].lastWork,
 				};
 			} catch (err: any) {
 				state.nodeStates[nodeName] = {
@@ -820,6 +821,7 @@ async function executeUntilLoop(
 					error: err.message,
 					startedAt: state.nodeStates[nodeName].startedAt,
 					completedAt: Date.now(),
+					lastWork: state.nodeStates[nodeName].lastWork,
 				};
 				return { status: "error", warning: `Node "${nodeName}" failed: ${err.message}` };
 			}
@@ -932,6 +934,7 @@ async function executeForEachLoop(
 					output,
 					startedAt: state.nodeStates[nodeName].startedAt,
 					completedAt: Date.now(),
+					lastWork: state.nodeStates[nodeName].lastWork,
 				};
 			} catch (err: any) {
 				state.nodeStates[nodeName] = {
@@ -939,6 +942,7 @@ async function executeForEachLoop(
 					error: err.message,
 					startedAt: state.nodeStates[nodeName].startedAt,
 					completedAt: Date.now(),
+					lastWork: state.nodeStates[nodeName].lastWork,
 				};
 				return { status: "error", warning: `Node "${nodeName}" (iteration ${i}) failed: ${err.message}` };
 			}
@@ -1191,6 +1195,7 @@ export async function executeGraph(
 						output,
 						startedAt: state.nodeStates[nodeName].startedAt,
 						completedAt: Date.now(),
+						lastWork: state.nodeStates[nodeName].lastWork,
 					};
 				} catch (err: any) {
 					state.nodeStates[nodeName] = {
@@ -1198,6 +1203,7 @@ export async function executeGraph(
 						error: err.message,
 						startedAt: state.nodeStates[nodeName].startedAt,
 						completedAt: Date.now(),
+						lastWork: state.nodeStates[nodeName].lastWork,
 					};
 					throw err; // Re-throw to hit the outer catch
 				}
@@ -1397,51 +1403,126 @@ export function renderGraphWidget(
 		}
 	}
 
-	// Render
-	const cardWidth = Math.min(width - 2, 64);
+	// ── Horizontal pipeline layout ──────────────────────────────────────────
+	// Calculate cards per row based on terminal width (agent-chain.ts pattern)
+	const arrowWidth = 5; // " ──▶ "
+	const minCardWidth = 24;
+	const maxCardsPerRow = Math.max(1, Math.floor((width + arrowWidth) / (minCardWidth + arrowWidth)));
 
-	for (let i = 0; i < renderOrder.length; i++) {
-		const item = renderOrder[i];
+	// Group renderOrder into sections: sequences of nodes, or loop blocks
+	type Section =
+		| { kind: "nodes"; names: string[] }
+		| { kind: "loop"; loopName: string; nodeNames: string[] };
+	const sections: Section[] = [];
+	let currentNodes: string[] = [];
 
-		if (item.type === "loop_start") {
-			const loopDef = graph.loops![item.name];
-			const cycle = state.loopCycles[item.name] || 0;
+	for (const item of renderOrder) {
+		if (item.type === "node") {
+			currentNodes.push(item.name);
+		} else if (item.type === "loop_start") {
+			if (currentNodes.length > 0) {
+				sections.push({ kind: "nodes", names: currentNodes });
+				currentNodes = [];
+			}
+			// Collect loop nodes until loop_end
+		} else if (item.type === "loop_end") {
+			// Find the loop's nodes from renderOrder
+			const loopNodes: string[] = [];
+			// Walk back to find matching loop_start
+			for (const inner of renderOrder) {
+				if (inner.type === "loop_start" && inner.name === item.name) {
+					// Start collecting
+					continue;
+				}
+				if (inner.type === "node" && loopMembership[inner.name] === item.name) {
+					loopNodes.push(inner.name);
+				}
+			}
+			sections.push({ kind: "loop", loopName: item.name, nodeNames: loopNodes });
+		}
+	}
+	if (currentNodes.length > 0) {
+		sections.push({ kind: "nodes", names: currentNodes });
+	}
+
+	/** Render a row of cards horizontally with ──▶ arrows between them */
+	function renderCardRow(names: string[], availWidth: number): string[] {
+		const cols = Math.min(maxCardsPerRow, names.length);
+		const totalArrowWidth = arrowWidth * (cols - 1);
+		const colWidth = Math.max(minCardWidth, Math.floor((availWidth - totalArrowWidth) / cols));
+		const arrowRow = 2; // middle of 5-line card (0-indexed)
+		const rowLines: string[] = [];
+
+		// Process in chunks of `cols`
+		for (let chunk = 0; chunk < names.length; chunk += cols) {
+			const rowNames = names.slice(chunk, chunk + cols);
+			const cards = rowNames.map(n => {
+				const ns = state.nodeStates[n] || { status: "idle" as const };
+				return renderCard(n, ns, colWidth, theme);
+			});
+
+			// Pad incomplete rows with blank cards
+			while (cards.length < cols) {
+				cards.push(Array(5).fill(" ".repeat(colWidth)));
+			}
+
+			const cardHeight = cards[0].length;
+			for (let line = 0; line < cardHeight; line++) {
+				let row = cards[0][line];
+				for (let c = 1; c < rowNames.length; c++) {
+					if (line === arrowRow) {
+						row += theme.fg("dim", " ──▶ ");
+					} else {
+						row += " ".repeat(arrowWidth);
+					}
+					row += cards[c][line];
+				}
+				rowLines.push(row);
+			}
+
+			// If there are more chunks, add a vertical arrow between rows
+			if (chunk + cols < names.length) {
+				rowLines.push(theme.fg("dim", "  ──▶"));
+			}
+		}
+		return rowLines;
+	}
+
+	// Render each section
+	let sectionIdx = 0;
+	for (const section of sections) {
+		if (section.kind === "nodes") {
+			lines.push(...renderCardRow(section.names, width));
+		} else {
+			// Loop section — render inside a containing border
+			const loopDef = graph.loops![section.loopName];
+			const cycle = state.loopCycles[section.loopName] || 0;
 			const maxC = loopDef.max_cycles;
-			const loopLabel = loopDef.until ? `until loop` : `for_each loop`;
-			lines.push(
-				theme.fg("dim", "┌─") +
-				theme.fg("accent", ` ${item.name} `) +
-				theme.fg("dim", `(${loopLabel}, cycle ${cycle}/${maxC})`)
-			);
-			continue;
-		}
+			const loopLabel = loopDef.until ? "until loop" : "for_each loop";
 
-		if (item.type === "loop_end") {
-			lines.push(theme.fg("dim", "└─"));
-			// Arrow to next
-			if (i < renderOrder.length - 1) {
-				lines.push(theme.fg("dim", "  ──▶"));
+			// Available inner width (2 for │ borders + 2 for padding)
+			const innerWidth = width - 4;
+
+			// Render inner cards horizontally
+			const innerLines = renderCardRow(section.nodeNames, innerWidth);
+
+			// Build the loop header
+			const headerText = ` ${section.loopName} (${loopLabel}, cycle ${cycle}/${maxC}) `;
+			const headerDash = Math.max(0, innerWidth - headerText.length);
+			const topBorder = "┌─" + headerText + "─".repeat(headerDash) + "─┐";
+			const botBorder = "└" + "─".repeat(innerWidth + 2) + "┘";
+
+			lines.push(theme.fg("dim", topBorder));
+			for (const il of innerLines) {
+				lines.push(theme.fg("dim", "│ ") + il + theme.fg("dim", " │"));
 			}
-			continue;
+			lines.push(theme.fg("dim", botBorder));
 		}
 
-		// Node card (bordered box)
-		const name = item.name;
-		const ns = state.nodeStates[name] || { status: "idle" as const };
-		const prefix = loopMembership[name] ? "│ " : "";
-		const cardLines = renderCard(name, ns, cardWidth, theme);
-		for (const cl of cardLines) {
-			lines.push(prefix + cl);
-		}
-
-		// Arrow between nodes (not after last, not inside loop boundaries)
-		const isLastInLoop = i + 1 < renderOrder.length && renderOrder[i + 1].type === "loop_end";
-		const isLast = i === renderOrder.length - 1;
-		if (!isLast && !isLastInLoop) {
-			const nextItem = renderOrder[i + 1];
-			if (nextItem.type === "node") {
-				lines.push(prefix + theme.fg("dim", "  ──▶"));
-			}
+		// Arrow between sections
+		sectionIdx++;
+		if (sectionIdx < sections.length) {
+			lines.push(theme.fg("dim", "  ──▶"));
 		}
 	}
 
