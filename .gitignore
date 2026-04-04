@@ -9,3 +9,6 @@ logs/*.jsonl
 *.swp
 *.swo
 *~
+
+# Prevent recursive self-symlink (plugin loader artifact)
+task-workflow-plugin
