@@ -1,0 +1,66 @@
+name: investigation-grinder
+description: >
+  Investigate a reported issue with an adversarial review loop.
+  Investigator gathers evidence, reviewer challenges it, loop repeats
+  until PASS or max cycles. Human gate decides final action.
+
+nodes:
+  investigator:
+    persona: personas/investigator.md
+    schema: schemas/investigator.json
+    tools: "read,bash,grep"
+    prompt: >
+      Investigate this reported issue: {{input}}
+
+      {{#if reviewer.output.challenges_for_investigator}}
+      The reviewer challenged your previous investigation with these points:
+      {{reviewer.output.challenges_for_investigator}}
+
+      Address each challenge with evidence.
+      {{/if}}
+
+  reviewer:
+    persona: personas/reviewer.md
+    schema: schemas/reviewer.json
+    tools: "read,bash,grep"
+    prompt: >
+      Review this investigation.
+
+      Classification: {{investigator.output.classification}}
+      Root cause: {{investigator.output.root_cause_summary}}
+      Affected records: {{investigator.output.affected_records_count}}
+      Details file: {{investigator.output.technical_details_file}}
+
+      Re-run the investigator's queries. Verify every claim.
+
+loops:
+  investigation_loop:
+    nodes:
+      - investigator
+      - reviewer
+    until: "reviewer.output.decision === 'PASS'"
+    max_cycles: 3
+    on_max: BLOCKED
+    pass_context:
+      - reviewer.output.challenges_for_investigator
+
+edges:
+  - from: START
+    to: investigation_loop
+  - from: investigation_loop
+    to: HUMAN_GATE
+
+human_gates:
+  - after: investigation_loop
+    title: "Investigation Review"
+    display:
+      - "Bottom line: {{reviewer.output.human_executive_summary.bottom_line}}"
+      - "Proof verified: {{reviewer.output.human_executive_summary.proof_verified}}"
+      - "Recommended action: {{reviewer.output.human_executive_summary.recommended_action}}"
+    options:
+      - label: "Create Task"
+        routes_to: DONE
+      - label: "Won't Fix"
+        routes_to: DONE
+      - label: "Skip"
+        routes_to: DONE
