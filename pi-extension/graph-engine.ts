@@ -84,6 +84,7 @@ export interface NodeState {
 	error?: string;
 	startedAt?: number;
 	completedAt?: number;
+	lastWork?: string;
 }
 
 /** Runtime state of the entire graph execution. */
@@ -509,6 +510,7 @@ export function spawnGraphNode(
 	baseDir: string,
 	model?: string,
 	timeout: number = 120_000,
+	onTextDelta?: (text: string) => void,
 ): Promise<Record<string, any>> {
 	return new Promise((resolve, reject) => {
 		// Read persona and schema from disk
@@ -577,6 +579,9 @@ export function spawnGraphNode(
 					const event = JSON.parse(line);
 					if (event.type === "tool_execution_start" && event.toolName === toolName) {
 						toolArgs = event.args;
+					}
+					if (event.type === "text_delta" && event.text && onTextDelta) {
+						onTextDelta(event.text);
 					}
 				} catch {}
 			}
@@ -798,7 +803,9 @@ async function executeUntilLoop(
 
 				const resolvedPrompt = resolveTemplate(nodeDef.prompt, templateContext);
 				const nodeModel = nodeDef.model || model;
-				const output = await spawnGraphNode(nodeDef, resolvedPrompt, baseDir, nodeModel);
+				const output = await spawnGraphNode(nodeDef, resolvedPrompt, baseDir, nodeModel, 120_000, (text) => {
+					state.nodeStates[nodeName].lastWork = text;
+				});
 
 				state.outputs[nodeName] = output;
 				state.nodeStates[nodeName] = {
@@ -913,7 +920,9 @@ async function executeForEachLoop(
 
 				const resolvedPrompt = resolveTemplate(nodeDef.prompt, templateContext);
 				const nodeModel = nodeDef.model || model;
-				const output = await spawnGraphNode(nodeDef, resolvedPrompt, baseDir, nodeModel);
+				const output = await spawnGraphNode(nodeDef, resolvedPrompt, baseDir, nodeModel, 120_000, (text) => {
+					state.nodeStates[nodeName].lastWork = text;
+				});
 
 				// Store both overwriting and indexed
 				state.outputs[nodeName] = output;
@@ -1172,7 +1181,9 @@ export async function executeGraph(
 
 					const resolvedPrompt = resolveTemplate(nodeDef.prompt, templateContext);
 					const nodeModel = nodeDef.model || model;
-					const output = await spawnGraphNode(nodeDef, resolvedPrompt, baseDir, nodeModel);
+					const output = await spawnGraphNode(nodeDef, resolvedPrompt, baseDir, nodeModel, 120_000, (text) => {
+						state.nodeStates[nodeName].lastWork = text;
+					});
 
 					state.outputs[nodeName] = output;
 					state.nodeStates[nodeName] = {
@@ -1264,6 +1275,67 @@ export function discoverGraphs(): Array<{ file: string; name: string; descriptio
 }
 
 /**
+ * Render a single node as a bordered card box.
+ * Modeled on agent-team.ts renderCard (lines 206-253).
+ * Returns string[] (one per visual line).
+ */
+export function renderCard(
+	name: string,
+	ns: NodeState,
+	cardWidth: number,
+	theme: any,
+): string[] {
+	const w = cardWidth - 2; // inner width (excluding │ borders)
+	const truncate = (s: string, max: number) =>
+		s.length > max ? s.slice(0, max - 3) + "..." : s;
+
+	const statusColor =
+		ns.status === "idle" ? "dim" :
+		ns.status === "running" ? "accent" :
+		ns.status === "done" ? "success" : "error";
+	const statusIcon =
+		ns.status === "idle" ? "○" :
+		ns.status === "running" ? "●" :
+		ns.status === "done" ? "✓" : "✗";
+
+	// Name line (bold accent)
+	const nameStr = theme.fg("accent", theme.bold(truncate(name, w - 1)));
+	const nameVisible = Math.min(name.length, w - 1);
+
+	// Status + elapsed line
+	const statusStr = `${statusIcon} ${ns.status}`;
+	const timeStr = ns.startedAt
+		? ` ${Math.round(((ns.completedAt || Date.now()) - ns.startedAt) / 1000)}s`
+		: "";
+	const statusLine = theme.fg(statusColor, statusStr + timeStr);
+	const statusVisible = statusStr.length + timeStr.length;
+
+	// Work/output preview line
+	const workRaw = ns.lastWork
+		? ns.lastWork
+		: ns.output
+			? JSON.stringify(ns.output)
+			: "";
+	const workText = truncate(workRaw, Math.min(50, w - 1));
+	const workLine = theme.fg("dim", workText);
+	const workVisible = workText.length;
+
+	// Borders
+	const top = "┌" + "─".repeat(w) + "┐";
+	const bot = "└" + "─".repeat(w) + "┘";
+	const border = (content: string, visLen: number) =>
+		theme.fg("dim", "│") + content + " ".repeat(Math.max(0, w - visLen)) + theme.fg("dim", "│");
+
+	return [
+		theme.fg("dim", top),
+		border(" " + nameStr, 1 + nameVisible),
+		border(" " + statusLine, 1 + statusVisible),
+		border(" " + workLine, 1 + workVisible),
+		theme.fg("dim", bot),
+	];
+}
+
+/**
  * Render the graph execution widget.
  * Shows node cards with status icons, elapsed time, output previews.
  * Loop sections show cycle counters. Cards connected by arrows.
@@ -1277,32 +1349,6 @@ export function renderGraphWidget(
 	const lines: string[] = [];
 	const nodeNames = Object.keys(graph.nodes);
 	if (nodeNames.length === 0) return [theme.fg("dim", "No nodes in graph")];
-
-	const statusIcon = (s: string) =>
-		s === "idle" ? "○" :
-		s === "running" ? "●" :
-		s === "done" ? "✓" : "✗";
-
-	const statusColor = (s: string) =>
-		s === "idle" ? "dim" :
-		s === "running" ? "accent" :
-		s === "done" ? "success" : "error";
-
-	const truncate = (s: string, max: number) =>
-		s.length > max ? s.slice(0, max - 3) + "..." : s;
-
-	const elapsed = (ns: NodeState) => {
-		if (!ns.startedAt) return "";
-		const end = ns.completedAt || Date.now();
-		const secs = Math.round((end - ns.startedAt) / 1000);
-		return `${secs}s`;
-	};
-
-	const outputPreview = (ns: NodeState) => {
-		if (!ns.output) return "";
-		const json = JSON.stringify(ns.output);
-		return truncate(json, Math.min(60, width - 10));
-	};
 
 	// Determine which nodes belong to loops
 	const loopMembership: Record<string, string> = {}; // nodeName -> loopName
@@ -1353,7 +1399,6 @@ export function renderGraphWidget(
 
 	// Render
 	const cardWidth = Math.min(width - 2, 64);
-	const innerW = cardWidth - 4; // 2 border + 2 padding
 
 	for (let i = 0; i < renderOrder.length; i++) {
 		const item = renderOrder[i];
@@ -1380,22 +1425,14 @@ export function renderGraphWidget(
 			continue;
 		}
 
-		// Node card
+		// Node card (bordered box)
 		const name = item.name;
 		const ns = state.nodeStates[name] || { status: "idle" as const };
-		const icon = statusIcon(ns.status);
-		const color = statusColor(ns.status);
 		const prefix = loopMembership[name] ? "│ " : "";
-
-		const nameLine = prefix + theme.fg("accent", theme.bold(truncate(name, innerW)));
-		const statusLine = prefix + theme.fg(color, `${icon} ${ns.status}`) +
-			(elapsed(ns) ? theme.fg("dim", ` ${elapsed(ns)}`) : "");
-		const preview = outputPreview(ns);
-		const previewLine = preview ? prefix + theme.fg("dim", truncate(preview, innerW)) : "";
-
-		lines.push(nameLine);
-		lines.push(statusLine);
-		if (previewLine) lines.push(previewLine);
+		const cardLines = renderCard(name, ns, cardWidth, theme);
+		for (const cl of cardLines) {
+			lines.push(prefix + cl);
+		}
 
 		// Arrow between nodes (not after last, not inside loop boundaries)
 		const isLastInLoop = i + 1 < renderOrder.length && renderOrder[i + 1].type === "loop_end";
@@ -1428,37 +1465,26 @@ export default function (pi: ExtensionAPI) {
 	let activeGraph: GraphDef | null = null;
 	let widgetTimer: ReturnType<typeof setInterval> | null = null;
 
-	let widgetFactorySet = false;
 	let isRunning = false;
 
 	function updateWidget() {
 		if (!widgetCtx || !activeGraphState || !activeGraph) return;
 
-		const state = activeGraphState;
-		const graph = activeGraph;
+		widgetCtx.ui.setWidget("graph-engine", (_tui: any, theme: any) => {
+			if (!Text) return { render: () => [], invalidate: () => {} };
+			const text = new Text("", 0, 1);
 
-		if (!widgetFactorySet) {
-			// Set the widget factory once — subsequent updates re-render via shared state
-			widgetCtx.ui.setWidget("graph-engine", (_tui: any, theme: any) => {
-				if (!Text) return { render: () => [], invalidate: () => {} };
-				const text = new Text("", 0, 1);
-
-				return {
-					render(width: number): string[] {
-						// Reads from the shared mutable state/graph refs
-						const currentState = activeGraphState || state;
-						const currentGraph = activeGraph || graph;
-						const lines = renderGraphWidget(currentState, currentGraph, theme, width);
-						text.setText(lines.join("\n"));
-						return text.render(width);
-					},
-					invalidate() {
-						text.invalidate();
-					},
-				};
-			});
-			widgetFactorySet = true;
-		}
+			return {
+				render(width: number): string[] {
+					const lines = renderGraphWidget(activeGraphState!, activeGraph!, theme, width);
+					text.setText(lines.join("\n"));
+					return text.render(width);
+				},
+				invalidate() {
+					text.invalidate();
+				},
+			};
+		});
 	}
 
 	function clearWidget() {
@@ -1471,7 +1497,6 @@ export default function (pi: ExtensionAPI) {
 		}
 		activeGraphState = null;
 		activeGraph = null;
-		widgetFactorySet = false;
 	}
 
 	// ── /run <graph-name> command ────────────────────────────────────────────
