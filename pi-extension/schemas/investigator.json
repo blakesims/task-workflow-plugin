@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "properties": {
+    "classification": {
+      "type": "string",
+      "enum": ["CONFIRMED_BUG", "NOT_A_BUG", "NEEDS_INFO"]
+    },
+    "root_cause_summary": {
+      "type": "string",
+      "description": "Concise summary of the root cause found during investigation."
+    },
+    "affected_records_count": {
+      "type": "integer",
+      "description": "Exact number of records affected based on SQL queries."
+    },
+    "technical_details_file": {
+      "type": "string",
+      "description": "Path to the markdown file where you wrote the full technical details and evidence (e.g., findings/w06-d5-issue.md)."
+    }
+  },
+  "required": ["classification", "root_cause_summary", "affected_records_count", "technical_details_file"]
+}

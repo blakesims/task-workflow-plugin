@@ -1,0 +1,26 @@
+{
+  "type": "object",
+  "properties": {
+    "decision": {
+      "type": "string",
+      "enum": ["PASS", "REVISE"]
+    },
+    "human_executive_summary": {
+      "type": "object",
+      "description": "High-signal summary designed to be read by the human gatekeeper. Do not include dry file diffs or query logs here.",
+      "properties": {
+        "bottom_line": { "type": "string", "description": "High-signal one sentence summary of the issue." },
+        "proof_verified": { "type": "boolean", "description": "Did you successfully re-run and verify the investigator's proof?" },
+        "risks_or_gaps": { "type": "array", "items": { "type": "string" }, "description": "Any residual risks, edge cases, or gaps in the investigation." },
+        "recommended_action": { "type": "string", "description": "What should the human orchestrator do next? (e.g. 'Create hotfix task for webhook handler')" }
+      },
+      "required": ["bottom_line", "proof_verified", "risks_or_gaps", "recommended_action"]
+    },
+    "challenges_for_investigator": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "If decision is REVISE, list specific numbered challenges for the investigator to address in the next cycle."
+    }
+  },
+  "required": ["decision", "human_executive_summary"]
+}
