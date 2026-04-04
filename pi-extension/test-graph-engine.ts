@@ -6,8 +6,8 @@
 import { readFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
-import { parseGraph, validateGraph, resolveTemplate } from "./graph-engine.js";
-import type { TemplateContext } from "./graph-engine.js";
+import { parseGraph, validateGraph, resolveTemplate, evaluateCondition, findNextTarget } from "./graph-engine.js";
+import type { TemplateContext, EdgeDef } from "./graph-engine.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -267,6 +267,202 @@ assert(
 	resolveTemplate("{{#if reviewer.output.decision}}Decision: {{reviewer.output.decision}}{{/if}}", emptyOutputCtx) === "",
 	"{{#if node.output.field}} with empty string is falsy",
 );
+
+// ── Phase 3 AC5: Safe condition evaluator (no eval()) ──────────────────────
+
+console.log("\n== Phase 3 AC5: evaluateCondition ==");
+
+// String equality
+{
+	const outputs = { reviewer: { decision: "PASS" } };
+	const r = evaluateCondition("reviewer.output.decision === 'PASS'", outputs);
+	assert(r.result === true, "=== 'PASS' matches when decision is PASS");
+	assert(r.warning === undefined, "no warning for valid condition");
+}
+
+{
+	const outputs = { reviewer: { decision: "REVISE" } };
+	const r = evaluateCondition("reviewer.output.decision === 'PASS'", outputs);
+	assert(r.result === false, "=== 'PASS' fails when decision is REVISE");
+}
+
+// String inequality
+{
+	const outputs = { reviewer: { decision: "REVISE" } };
+	const r = evaluateCondition("reviewer.output.decision !== 'PASS'", outputs);
+	assert(r.result === true, "!== 'PASS' matches when decision is REVISE");
+}
+
+// Numeric comparisons
+{
+	const outputs = { analyzer: { score: 85 } };
+	assert(evaluateCondition("analyzer.output.score > 50", outputs).result === true, "> 50 when score=85");
+	assert(evaluateCondition("analyzer.output.score < 90", outputs).result === true, "< 90 when score=85");
+	assert(evaluateCondition("analyzer.output.score >= 85", outputs).result === true, ">= 85 when score=85");
+	assert(evaluateCondition("analyzer.output.score <= 85", outputs).result === true, "<= 85 when score=85");
+	assert(evaluateCondition("analyzer.output.score > 90", outputs).result === false, "> 90 fails when score=85");
+}
+
+// Boolean value
+{
+	const outputs = { checker: { passed: true } };
+	assert(evaluateCondition("checker.output.passed === true", outputs).result === true, "=== true");
+}
+
+// Missing node returns false (no crash)
+{
+	const outputs = {};
+	const r = evaluateCondition("missing.output.field === 'value'", outputs);
+	assert(r.result === false, "missing node returns false");
+}
+
+// Deep dot-path
+{
+	const outputs = { reviewer: { summary: { status: "ok" } } };
+	const r = evaluateCondition("reviewer.output.summary.status === 'ok'", outputs);
+	assert(r.result === true, "deep dot-path condition works");
+}
+
+// Unparseable condition: fallback to false with warning (plan review minor #4)
+{
+	const r = evaluateCondition("this is not a condition", {});
+	assert(r.result === false, "unparseable condition returns false");
+	assert(r.warning !== undefined && r.warning.includes("Unparseable"), "unparseable condition has warning");
+}
+
+// Unparseable value (node exists so value parsing is reached)
+{
+	const outputs = { node: { field: "x" } };
+	const r = evaluateCondition("node.output.field === someUndefined", outputs);
+	assert(r.result === false, "non-numeric non-string value returns false");
+	assert(r.warning !== undefined, "unparseable value has warning");
+}
+
+// Double-quoted strings
+{
+	const outputs = { reviewer: { decision: "PASS" } };
+	const r = evaluateCondition('reviewer.output.decision === "PASS"', outputs);
+	assert(r.result === true, 'double-quoted string "PASS" works');
+}
+
+// ── Phase 3: Edge following ─────────────────────────────────────────────────
+
+console.log("\n== Phase 3: findNextTarget ==");
+
+// Basic edge following
+{
+	const edges: EdgeDef[] = [
+		{ from: "START", to: "investigator" },
+		{ from: "investigator", to: "reviewer" },
+		{ from: "reviewer", to: "DONE" },
+	];
+	const r = findNextTarget("investigator", edges, {});
+	assert(r.target === "reviewer", "follows basic edge from investigator to reviewer");
+}
+
+// No outbound edge defaults to DONE with warning
+{
+	const edges: EdgeDef[] = [{ from: "START", to: "a" }];
+	const r = findNextTarget("orphan", edges, {});
+	assert(r.target === "DONE", "no outbound edge defaults to DONE");
+	assert(r.warning !== undefined, "missing edge produces warning");
+}
+
+// Conditional edges: first match wins
+{
+	const edges: EdgeDef[] = [
+		{ from: "reviewer", to: "investigator", when: "reviewer.output.decision === 'REVISE'" },
+		{ from: "reviewer", to: "DONE", when: "reviewer.output.decision === 'PASS'" },
+		{ from: "reviewer", to: "BLOCKED" }, // default fallback
+	];
+	const outputs = { reviewer: { decision: "PASS" } };
+	const r = findNextTarget("reviewer", edges, outputs);
+	assert(r.target === "DONE", "conditional edge matches PASS -> DONE");
+}
+
+{
+	const edges: EdgeDef[] = [
+		{ from: "reviewer", to: "investigator", when: "reviewer.output.decision === 'REVISE'" },
+		{ from: "reviewer", to: "DONE", when: "reviewer.output.decision === 'PASS'" },
+		{ from: "reviewer", to: "BLOCKED" }, // default fallback
+	];
+	const outputs = { reviewer: { decision: "REVISE" } };
+	const r = findNextTarget("reviewer", edges, outputs);
+	assert(r.target === "investigator", "conditional edge matches REVISE -> investigator");
+}
+
+// No conditional match falls through to default
+{
+	const edges: EdgeDef[] = [
+		{ from: "reviewer", to: "DONE", when: "reviewer.output.decision === 'PASS'" },
+		{ from: "reviewer", to: "BLOCKED" }, // default fallback
+	];
+	const outputs = { reviewer: { decision: "UNKNOWN" } };
+	const r = findNextTarget("reviewer", edges, outputs);
+	assert(r.target === "BLOCKED", "falls back to default edge when no condition matches");
+}
+
+// No conditional match and no default -> BLOCKED with warning
+{
+	const edges: EdgeDef[] = [
+		{ from: "reviewer", to: "DONE", when: "reviewer.output.decision === 'PASS'" },
+	];
+	const outputs = { reviewer: { decision: "UNKNOWN" } };
+	const r = findNextTarget("reviewer", edges, outputs);
+	assert(r.target === "BLOCKED", "no match and no default -> BLOCKED");
+	assert(r.warning !== undefined, "produces warning when no edge matches");
+}
+
+// ── Phase 3: false/0 truthy fix (Phase 2 deferred major) ───────────────────
+
+console.log("\n== Phase 3: false/0 truthy fix ==");
+
+assert(
+	resolveTemplate("{{#if val}}yes{{/if}}", { val: false as any }) === "",
+	"false is falsy in {{#if}}",
+);
+
+assert(
+	resolveTemplate("{{#if val}}yes{{/if}}", { val: 0 as any }) === "",
+	"0 is falsy in {{#if}}",
+);
+
+assert(
+	resolveTemplate("{{#if val}}yes{{/if}}", { val: 1 as any }) === "yes",
+	"1 is still truthy in {{#if}}",
+);
+
+// ── Phase 3: Edge when field parsed from YAML ───────────────────────────────
+
+console.log("\n== Phase 3: Edge when field in YAML ==");
+
+const yamlWithWhen = `
+name: test-conditional
+description: test
+nodes:
+  a:
+    persona: personas/investigator.md
+    schema: schemas/investigator.json
+    prompt: test
+  b:
+    persona: personas/investigator.md
+    schema: schemas/investigator.json
+    prompt: test
+edges:
+  - from: START
+    to: a
+  - from: a
+    to: b
+    when: "a.output.ready === 'yes'"
+  - from: a
+    to: DONE
+  - from: b
+    to: DONE
+`;
+
+const graphWhen = parseGraph(yamlWithWhen);
+assert(graphWhen.edges[1].when === "a.output.ready === 'yes'", "when field parsed from YAML");
+assert(graphWhen.edges[0].when === undefined, "edge without when has undefined");
 
 // ── Summary ──────────────────────────────────────────────────────────────────
 

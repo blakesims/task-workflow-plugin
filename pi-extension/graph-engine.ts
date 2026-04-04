@@ -20,6 +20,7 @@ export interface NodeDef {
 export interface EdgeDef {
 	from: string;          // Source: "START" | node name | loop name
 	to: string;            // Target: node name | loop name | "HUMAN_GATE" | "DONE"
+	when?: string;         // Optional condition: "node.output.field === 'value'"
 }
 
 /** A loop definition — either `until` or `for_each`, not both. */
@@ -85,6 +86,15 @@ export interface ValidationResult {
 	warnings: string[];
 }
 
+/** Result of graph execution. */
+export interface GraphResult {
+	status: "completed" | "blocked" | "error";
+	outputs: Record<string, Record<string, any>>;
+	humanGateSelection?: string;  // Label selected at human gate
+	elapsedMs: number;
+	error?: string;
+}
+
 // ── Phase 1: YAML Parser ────────────────────────────────────────────────────
 
 /**
@@ -129,10 +139,12 @@ export function parseGraph(yamlString: string): GraphDef {
 	// Parse edges
 	if (Array.isArray(raw.edges)) {
 		for (const e of raw.edges) {
-			graph.edges.push({
+			const edge: EdgeDef = {
 				from: e.from || "",
 				to: e.to || "",
-			});
+			};
+			if (e.when) edge.when = e.when;
+			graph.edges.push(edge);
 		}
 	}
 
@@ -404,8 +416,8 @@ export function resolveTemplate(template: string, context: TemplateContext): str
 	// 1. Process {{#if varName}}...{{/if}} blocks (non-greedy, no nesting)
 	result = result.replace(/\{\{#if\s+([^}]+)\}\}([\s\S]*?)\{\{\/if\}\}/g, (_match, varExpr: string, body: string) => {
 		const value = resolveVar(varExpr.trim(), context);
-		// Truthy: present, non-null, non-empty-string, non-empty-array
-		if (value === undefined || value === null || value === "" || (Array.isArray(value) && value.length === 0)) {
+		// Falsy: undefined, null, false, 0, empty string, empty array
+		if (value === undefined || value === null || value === false || value === 0 || value === "" || (Array.isArray(value) && value.length === 0)) {
 			return "";
 		}
 		return body;
@@ -585,6 +597,593 @@ export function spawnGraphNode(
 			reject(err);
 		});
 	});
+}
+
+// ── Phase 3: Safe Condition Evaluator ──────────────────────────────────────
+
+/**
+ * Safely evaluate a condition string against graph state outputs.
+ * Supports patterns:
+ *   "node.output.field === 'value'"
+ *   "node.output.field !== 'value'"
+ *   "node.output.field > N"
+ *   "node.output.field < N"
+ *   "node.output.field >= N"
+ *   "node.output.field <= N"
+ *
+ * Does NOT use eval(). Returns false with a warning for unparseable conditions.
+ */
+export function evaluateCondition(
+	condition: string,
+	outputs: Record<string, Record<string, any>>,
+): { result: boolean; warning?: string } {
+	// Pattern: dotpath OPERATOR value
+	const match = condition.match(
+		/^(\w+)\.output\.(\S+?)\s*(===|!==|>=|<=|>|<)\s*(.+)$/
+	);
+
+	if (!match) {
+		return {
+			result: false,
+			warning: `Unparseable condition (treating as false): "${condition}"`,
+		};
+	}
+
+	const [, nodeName, fieldPath, operator, rawValue] = match;
+
+	// Resolve the left side from outputs
+	const nodeOutput = outputs[nodeName];
+	if (nodeOutput === undefined) {
+		return { result: false };
+	}
+	const actual = getByDotPath(nodeOutput, fieldPath);
+
+	// Parse the right side value
+	let expected: any;
+	const strMatch = rawValue.match(/^['"](.*)['"]$/);
+	if (strMatch) {
+		expected = strMatch[1]; // String literal
+	} else if (rawValue === "true") {
+		expected = true;
+	} else if (rawValue === "false") {
+		expected = false;
+	} else if (rawValue === "null") {
+		expected = null;
+	} else {
+		const num = Number(rawValue);
+		if (!isNaN(num)) {
+			expected = num;
+		} else {
+			return {
+				result: false,
+				warning: `Cannot parse value in condition: "${rawValue}"`,
+			};
+		}
+	}
+
+	// Evaluate
+	switch (operator) {
+		case "===": return { result: actual === expected };
+		case "!==": return { result: actual !== expected };
+		case ">":   return { result: actual > expected };
+		case "<":   return { result: actual < expected };
+		case ">=":  return { result: actual >= expected };
+		case "<=":  return { result: actual <= expected };
+		default:
+			return {
+				result: false,
+				warning: `Unknown operator in condition: "${operator}"`,
+			};
+	}
+}
+
+// ── Phase 3: Edge Following ───────────────────────────────────────────────
+
+/**
+ * Find the next target after a node/loop completes.
+ * Evaluates `when` conditions in order; first match wins.
+ * Edges without `when` act as default/fallback.
+ */
+export function findNextTarget(
+	from: string,
+	edges: EdgeDef[],
+	outputs: Record<string, Record<string, any>>,
+): { target: string; warning?: string } {
+	const outbound = edges.filter((e) => e.from === from);
+	if (outbound.length === 0) {
+		return { target: "DONE", warning: `No outbound edge from "${from}", defaulting to DONE` };
+	}
+
+	// Separate conditional and default edges
+	const conditional = outbound.filter((e) => e.when);
+	const defaults = outbound.filter((e) => !e.when);
+
+	// Evaluate conditional edges in order
+	for (const edge of conditional) {
+		const { result, warning } = evaluateCondition(edge.when!, outputs);
+		if (warning) {
+			// Log but continue checking other edges
+		}
+		if (result) {
+			return { target: edge.to, warning };
+		}
+	}
+
+	// Fall back to default edge
+	if (defaults.length > 0) {
+		return { target: defaults[0].to };
+	}
+
+	// No matching condition and no default
+	return {
+		target: "BLOCKED",
+		warning: `No matching edge from "${from}" (${conditional.length} conditional edges, none matched)`,
+	};
+}
+
+// ── Phase 3: Until Loop Execution ─────────────────────────────────────────
+
+/**
+ * Execute an `until` loop: run nodes in sequence, check condition, repeat.
+ */
+async function executeUntilLoop(
+	loopName: string,
+	loopDef: LoopDef,
+	graph: GraphDef,
+	state: GraphState,
+	baseDir: string,
+	ctx: ExtensionContext,
+): Promise<{ status: "completed" | "blocked" | "error"; warning?: string }> {
+	for (let cycle = 1; cycle <= loopDef.max_cycles; cycle++) {
+		state.loopCycles[loopName] = cycle;
+		state.currentLoop = loopName;
+
+		// Execute each node in the loop sequence
+		for (const nodeName of loopDef.nodes) {
+			state.currentNode = nodeName;
+			state.nodeStates[nodeName] = {
+				status: "running",
+				startedAt: Date.now(),
+			};
+
+			try {
+				const nodeDef = graph.nodes[nodeName];
+				if (!nodeDef) {
+					throw new Error(`Loop "${loopName}" references unknown node: "${nodeName}"`);
+				}
+
+				// Build template context from state
+				const templateContext: TemplateContext = {
+					input: state.input,
+					outputs: state.outputs,
+					loopVars: {},
+				};
+
+				// Add pass_context variables from previous cycle
+				if (loopDef.pass_context && cycle > 1) {
+					for (const varPath of loopDef.pass_context) {
+						// pass_context entries are dot-paths like "reviewer.output.challenges"
+						const outputMatch = varPath.match(/^(\w+)\.output\.(.+)$/);
+						if (outputMatch) {
+							const [, srcNode, field] = outputMatch;
+							const val = getByDotPath(state.outputs[srcNode], field);
+							if (val !== undefined) {
+								templateContext.loopVars![field] = val;
+							}
+						}
+					}
+				}
+
+				const resolvedPrompt = resolveTemplate(nodeDef.prompt, templateContext);
+				const output = await spawnGraphNode(nodeDef, resolvedPrompt, baseDir);
+
+				state.outputs[nodeName] = output;
+				state.nodeStates[nodeName] = {
+					status: "done",
+					output,
+					startedAt: state.nodeStates[nodeName].startedAt,
+					completedAt: Date.now(),
+				};
+			} catch (err: any) {
+				state.nodeStates[nodeName] = {
+					status: "error",
+					error: err.message,
+					startedAt: state.nodeStates[nodeName].startedAt,
+					completedAt: Date.now(),
+				};
+				return { status: "error", warning: `Node "${nodeName}" failed: ${err.message}` };
+			}
+		}
+
+		// Evaluate the until condition
+		const { result, warning } = evaluateCondition(loopDef.until!, state.outputs);
+		if (warning) {
+			ctx.ui.notify(`Loop "${loopName}" cycle ${cycle}: ${warning}`, "warning");
+		}
+
+		if (result) {
+			state.currentLoop = null;
+			return { status: "completed" };
+		}
+	}
+
+	// max_cycles exceeded
+	state.currentLoop = null;
+	const onMax = loopDef.on_max || "BLOCKED";
+	ctx.ui.notify(
+		`Loop "${loopName}" reached max_cycles (${loopDef.max_cycles}), transitioning to ${onMax}`,
+		"warning",
+	);
+
+	if (onMax === "ERROR") return { status: "error" };
+	if (onMax === "BLOCKED") return { status: "blocked" };
+	return { status: "completed" }; // DONE or a node name — let the caller handle routing
+}
+
+// ── Phase 3: ForEach Loop Execution ───────────────────────────────────────
+
+/**
+ * Execute a `for_each` loop: iterate over an array, execute nodes for each element.
+ * Output keying: each iteration overwrites node outputs, but also stores
+ * indexed copies as `nodeName_0`, `nodeName_1`, etc. for downstream access.
+ */
+async function executeForEachLoop(
+	loopName: string,
+	loopDef: LoopDef,
+	graph: GraphDef,
+	state: GraphState,
+	baseDir: string,
+	ctx: ExtensionContext,
+): Promise<{ status: "completed" | "blocked" | "error"; warning?: string }> {
+	// Resolve the array from for_each dot-path
+	const forEachPath = loopDef.for_each!;
+	const pathMatch = forEachPath.match(/^(\w+)\.output\.(.+)$/);
+	if (!pathMatch) {
+		return {
+			status: "error",
+			warning: `Invalid for_each path: "${forEachPath}"`,
+		};
+	}
+
+	const [, srcNode, fieldPath] = pathMatch;
+	const sourceArray = getByDotPath(state.outputs[srcNode], fieldPath);
+
+	if (!Array.isArray(sourceArray)) {
+		return {
+			status: "error",
+			warning: `for_each path "${forEachPath}" did not resolve to an array (got ${typeof sourceArray})`,
+		};
+	}
+
+	const maxIterations = Math.min(sourceArray.length, loopDef.max_cycles);
+	state.currentLoop = loopName;
+
+	for (let i = 0; i < maxIterations; i++) {
+		state.loopCycles[loopName] = i + 1;
+		const element = sourceArray[i];
+
+		for (const nodeName of loopDef.nodes) {
+			state.currentNode = nodeName;
+			state.nodeStates[nodeName] = {
+				status: "running",
+				startedAt: Date.now(),
+			};
+
+			try {
+				const nodeDef = graph.nodes[nodeName];
+				if (!nodeDef) {
+					throw new Error(`Loop "${loopName}" references unknown node: "${nodeName}"`);
+				}
+
+				// Build template context with loop variable
+				const templateContext: TemplateContext = {
+					input: state.input,
+					outputs: state.outputs,
+					loopVars: {
+						item: element,          // Generic loop var
+						index: i,               // Current index
+					},
+				};
+
+				const resolvedPrompt = resolveTemplate(nodeDef.prompt, templateContext);
+				const output = await spawnGraphNode(nodeDef, resolvedPrompt, baseDir);
+
+				// Store both overwriting and indexed
+				state.outputs[nodeName] = output;
+				state.outputs[`${nodeName}_${i}`] = output;
+				state.nodeStates[nodeName] = {
+					status: "done",
+					output,
+					startedAt: state.nodeStates[nodeName].startedAt,
+					completedAt: Date.now(),
+				};
+			} catch (err: any) {
+				state.nodeStates[nodeName] = {
+					status: "error",
+					error: err.message,
+					startedAt: state.nodeStates[nodeName].startedAt,
+					completedAt: Date.now(),
+				};
+				return { status: "error", warning: `Node "${nodeName}" (iteration ${i}) failed: ${err.message}` };
+			}
+		}
+	}
+
+	if (sourceArray.length > loopDef.max_cycles) {
+		ctx.ui.notify(
+			`for_each loop "${loopName}" capped at max_cycles (${loopDef.max_cycles}), array had ${sourceArray.length} items`,
+			"warning",
+		);
+	}
+
+	state.currentLoop = null;
+	return { status: "completed" };
+}
+
+// ── Phase 3: Human Gate Execution ─────────────────────────────────────────
+
+/**
+ * Execute a human gate: display info, present options via ctx.ui.select().
+ * Maps the returned label string back to the option's routes_to value.
+ */
+async function executeHumanGate(
+	gateDef: HumanGateDef,
+	state: GraphState,
+	ctx: ExtensionContext,
+): Promise<{ routesTo: string; selectedLabel: string }> {
+	// Build template context for display strings
+	const templateContext: TemplateContext = {
+		input: state.input,
+		outputs: state.outputs,
+	};
+
+	// Resolve display templates
+	const displayLines = gateDef.display.map((d) =>
+		resolveTemplate(d, templateContext)
+	);
+
+	// Extract labels for select()
+	const labels = gateDef.options.map((o) => o.label);
+
+	// Check if UI is available
+	if (!ctx.hasUI) {
+		const firstOption = gateDef.options[0];
+		ctx.ui.notify(
+			`Headless mode: auto-selecting "${firstOption.label}" for gate "${gateDef.title}"`,
+			"warning",
+		);
+		return { routesTo: firstOption.routes_to, selectedLabel: firstOption.label };
+	}
+
+	// Show display lines as info notifications
+	for (const line of displayLines) {
+		ctx.ui.notify(line, "info");
+	}
+
+	// Present options via select()
+	const selected = await ctx.ui.select(gateDef.title, labels);
+
+	if (selected === undefined) {
+		// User cancelled — treat as first option with warning
+		const firstOption = gateDef.options[0];
+		ctx.ui.notify(
+			`Gate cancelled, defaulting to "${firstOption.label}"`,
+			"warning",
+		);
+		return { routesTo: firstOption.routes_to, selectedLabel: firstOption.label };
+	}
+
+	// Map selected label back to routes_to
+	const matchedOption = gateDef.options.find((o) => o.label === selected);
+	if (!matchedOption) {
+		// Should not happen, but handle defensively
+		const firstOption = gateDef.options[0];
+		ctx.ui.notify(
+			`Unknown selection "${selected}", defaulting to "${firstOption.label}"`,
+			"warning",
+		);
+		return { routesTo: firstOption.routes_to, selectedLabel: firstOption.label };
+	}
+
+	return { routesTo: matchedOption.routes_to, selectedLabel: matchedOption.label };
+}
+
+// ── Phase 3: Main Graph Executor ──────────────────────────────────────────
+
+/**
+ * Execute a graph from start to completion.
+ *
+ * Algorithm:
+ *   1. Find START edge, resolve target
+ *   2. If target is a node: execute it, follow outbound edge
+ *   3. If target is a loop: execute the loop, follow outbound edge
+ *   4. If target is HUMAN_GATE: find gate def, present options, route
+ *   5. If target is DONE/BLOCKED: terminate
+ *   6. Repeat from step 2
+ */
+export async function executeGraph(
+	graph: GraphDef,
+	input: string,
+	baseDir: string,
+	ctx: ExtensionContext,
+	pi: ExtensionAPI,
+): Promise<GraphResult> {
+	const startTime = Date.now();
+
+	// Initialize graph state
+	const state: GraphState = {
+		graphName: graph.name,
+		status: "running",
+		currentNode: null,
+		currentLoop: null,
+		loopCycles: {},
+		nodeStates: {},
+		outputs: {},
+		input,
+		startedAt: startTime,
+	};
+
+	// Initialize all node states to idle
+	for (const name of Object.keys(graph.nodes)) {
+		state.nodeStates[name] = { status: "idle" };
+	}
+
+	ctx.ui.notify(`Starting graph: ${graph.name}`, "info");
+
+	try {
+		// Find START edge
+		const startEdge = graph.edges.find((e) => e.from === "START");
+		if (!startEdge) {
+			throw new Error("No START edge found in graph");
+		}
+
+		let currentTarget = startEdge.to;
+
+		// Main execution loop
+		while (currentTarget !== "DONE" && currentTarget !== "BLOCKED" && currentTarget !== "ERROR") {
+			// Check if target is a loop
+			if (graph.loops && graph.loops[currentTarget]) {
+				const loopDef = graph.loops[currentTarget];
+				const loopName = currentTarget;
+
+				let loopResult: { status: string; warning?: string };
+
+				if (loopDef.until) {
+					loopResult = await executeUntilLoop(
+						loopName, loopDef, graph, state, baseDir, ctx,
+					);
+				} else if (loopDef.for_each) {
+					loopResult = await executeForEachLoop(
+						loopName, loopDef, graph, state, baseDir, ctx,
+					);
+				} else {
+					throw new Error(`Loop "${loopName}" has neither until nor for_each`);
+				}
+
+				if (loopResult.status === "error") {
+					state.status = "error";
+					return {
+						status: "error",
+						outputs: state.outputs,
+						elapsedMs: Date.now() - startTime,
+						error: loopResult.warning || "Loop execution failed",
+					};
+				}
+
+				if (loopResult.status === "blocked") {
+					// If loop hit max_cycles with on_max=BLOCKED
+					state.status = "blocked";
+					return {
+						status: "blocked",
+						outputs: state.outputs,
+						elapsedMs: Date.now() - startTime,
+					};
+				}
+
+				// Loop completed — follow outbound edge
+				const { target, warning } = findNextTarget(loopName, graph.edges, state.outputs);
+				if (warning) ctx.ui.notify(warning, "warning");
+				currentTarget = target;
+
+			} else if (currentTarget === "HUMAN_GATE") {
+				// Find the matching human gate definition
+				// The gate's `after` field tells us which node/loop preceded this gate
+				// We need to find which edge led us here to determine the `after` source
+				const gateEdge = graph.edges.find(
+					(e) => e.to === "HUMAN_GATE" &&
+					// The source must have already been executed
+					(state.outputs[e.from] !== undefined ||
+					 (graph.loops && graph.loops[e.from] !== undefined && state.loopCycles[e.from] !== undefined))
+				);
+
+				let gateDef: HumanGateDef | undefined;
+				if (gateEdge) {
+					gateDef = graph.human_gates?.find((g) => g.after === gateEdge.from);
+				}
+				if (!gateDef) {
+					// Fallback: use first gate
+					gateDef = graph.human_gates?.[0];
+				}
+
+				if (!gateDef) {
+					throw new Error("Reached HUMAN_GATE but no gate definition found");
+				}
+
+				const { routesTo, selectedLabel } = await executeHumanGate(gateDef, state, ctx);
+				state.outputs["__human_gate__"] = { selection: selectedLabel, routes_to: routesTo };
+
+				currentTarget = routesTo;
+
+			} else if (graph.nodes[currentTarget]) {
+				// Execute a single node
+				const nodeName = currentTarget;
+				const nodeDef = graph.nodes[nodeName];
+
+				state.currentNode = nodeName;
+				state.nodeStates[nodeName] = {
+					status: "running",
+					startedAt: Date.now(),
+				};
+
+				const templateContext: TemplateContext = {
+					input: state.input,
+					outputs: state.outputs,
+				};
+
+				const resolvedPrompt = resolveTemplate(nodeDef.prompt, templateContext);
+				const output = await spawnGraphNode(nodeDef, resolvedPrompt, baseDir);
+
+				state.outputs[nodeName] = output;
+				state.nodeStates[nodeName] = {
+					status: "done",
+					output,
+					startedAt: state.nodeStates[nodeName].startedAt,
+					completedAt: Date.now(),
+				};
+
+				// Follow outbound edge
+				const { target, warning } = findNextTarget(nodeName, graph.edges, state.outputs);
+				if (warning) ctx.ui.notify(warning, "warning");
+				currentTarget = target;
+
+			} else {
+				throw new Error(`Unknown target: "${currentTarget}" — not a node, loop, or terminal`);
+			}
+		}
+
+		// Terminal state
+		state.status = currentTarget === "DONE" ? "completed" : "blocked";
+		state.completedAt = Date.now();
+
+		const resultStatus = currentTarget === "DONE" ? "completed" as const :
+		                     currentTarget === "BLOCKED" ? "blocked" as const :
+		                     "error" as const;
+
+		ctx.ui.notify(
+			`Graph "${graph.name}" finished: ${resultStatus} (${((Date.now() - startTime) / 1000).toFixed(1)}s)`,
+			"info",
+		);
+
+		return {
+			status: resultStatus,
+			outputs: state.outputs,
+			humanGateSelection: state.outputs["__human_gate__"]?.selection,
+			elapsedMs: Date.now() - startTime,
+		};
+
+	} catch (err: any) {
+		state.status = "error";
+		state.completedAt = Date.now();
+
+		ctx.ui.notify(`Graph error: ${err.message}`, "error");
+
+		return {
+			status: "error",
+			outputs: state.outputs,
+			elapsedMs: Date.now() - startTime,
+			error: err.message,
+		};
+	}
 }
 
 // ── Extension Entry Point (Phase 4 — placeholder) ──────────────────────────
