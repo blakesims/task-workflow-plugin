@@ -1,9 +1,10 @@
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { parse as parseYaml } from "yaml";
-import { existsSync, readFileSync } from "fs";
+import { existsSync, readFileSync, readdirSync } from "fs";
 import { spawn } from "child_process";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import { Text, type AutocompleteItem, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 
 // ── Phase 1: Types ──────────────────────────────────────────────────────────
 
@@ -733,7 +734,8 @@ async function executeUntilLoop(
 	state: GraphState,
 	baseDir: string,
 	ctx: ExtensionContext,
-): Promise<{ status: "completed" | "blocked" | "error"; warning?: string }> {
+	model?: string,
+): Promise<{ status: "completed" | "blocked" | "error"; warning?: string; routeTo?: string }> {
 	for (let cycle = 1; cycle <= loopDef.max_cycles; cycle++) {
 		state.loopCycles[loopName] = cycle;
 		state.currentLoop = loopName;
@@ -775,7 +777,8 @@ async function executeUntilLoop(
 				}
 
 				const resolvedPrompt = resolveTemplate(nodeDef.prompt, templateContext);
-				const output = await spawnGraphNode(nodeDef, resolvedPrompt, baseDir);
+				const nodeModel = nodeDef.model || model;
+				const output = await spawnGraphNode(nodeDef, resolvedPrompt, baseDir, nodeModel);
 
 				state.outputs[nodeName] = output;
 				state.nodeStates[nodeName] = {
@@ -817,7 +820,9 @@ async function executeUntilLoop(
 
 	if (onMax === "ERROR") return { status: "error" };
 	if (onMax === "BLOCKED") return { status: "blocked" };
-	return { status: "completed" }; // DONE or a node name — let the caller handle routing
+	if (onMax === "DONE") return { status: "completed", routeTo: "DONE" };
+	// on_max is a node name — return it so the caller can route there
+	return { status: "completed", routeTo: onMax };
 }
 
 // ── Phase 3: ForEach Loop Execution ───────────────────────────────────────
@@ -834,6 +839,7 @@ async function executeForEachLoop(
 	state: GraphState,
 	baseDir: string,
 	ctx: ExtensionContext,
+	model?: string,
 ): Promise<{ status: "completed" | "blocked" | "error"; warning?: string }> {
 	// Resolve the array from for_each dot-path
 	const forEachPath = loopDef.for_each!;
@@ -886,7 +892,8 @@ async function executeForEachLoop(
 				};
 
 				const resolvedPrompt = resolveTemplate(nodeDef.prompt, templateContext);
-				const output = await spawnGraphNode(nodeDef, resolvedPrompt, baseDir);
+				const nodeModel = nodeDef.model || model;
+				const output = await spawnGraphNode(nodeDef, resolvedPrompt, baseDir, nodeModel);
 
 				// Store both overwriting and indexed
 				state.outputs[nodeName] = output;
@@ -1007,11 +1014,13 @@ export async function executeGraph(
 	baseDir: string,
 	ctx: ExtensionContext,
 	pi: ExtensionAPI,
+	sharedState?: GraphState,
+	model?: string,
 ): Promise<GraphResult> {
 	const startTime = Date.now();
 
-	// Initialize graph state
-	const state: GraphState = {
+	// Use shared state if provided (for TUI widget), otherwise create local
+	const state: GraphState = sharedState || {
 		graphName: graph.name,
 		status: "running",
 		currentNode: null,
@@ -1023,9 +1032,14 @@ export async function executeGraph(
 		startedAt: startTime,
 	};
 
-	// Initialize all node states to idle
-	for (const name of Object.keys(graph.nodes)) {
-		state.nodeStates[name] = { status: "idle" };
+	// Initialize if using fresh state
+	if (!sharedState) {
+		state.status = "running";
+		state.input = input;
+		state.startedAt = startTime;
+		for (const name of Object.keys(graph.nodes)) {
+			state.nodeStates[name] = { status: "idle" };
+		}
 	}
 
 	ctx.ui.notify(`Starting graph: ${graph.name}`, "info");
@@ -1050,11 +1064,11 @@ export async function executeGraph(
 
 				if (loopDef.until) {
 					loopResult = await executeUntilLoop(
-						loopName, loopDef, graph, state, baseDir, ctx,
+						loopName, loopDef, graph, state, baseDir, ctx, model,
 					);
 				} else if (loopDef.for_each) {
 					loopResult = await executeForEachLoop(
-						loopName, loopDef, graph, state, baseDir, ctx,
+						loopName, loopDef, graph, state, baseDir, ctx, model,
 					);
 				} else {
 					throw new Error(`Loop "${loopName}" has neither until nor for_each`);
@@ -1080,10 +1094,15 @@ export async function executeGraph(
 					};
 				}
 
-				// Loop completed — follow outbound edge
-				const { target, warning } = findNextTarget(loopName, graph.edges, state.outputs);
-				if (warning) ctx.ui.notify(warning, "warning");
-				currentTarget = target;
+				// If loop returned a specific route (on_max with DONE or node name), use it
+				if (loopResult.routeTo) {
+					currentTarget = loopResult.routeTo;
+				} else {
+					// Loop completed normally — follow outbound edge
+					const { target, warning } = findNextTarget(loopName, graph.edges, state.outputs);
+					if (warning) ctx.ui.notify(warning, "warning");
+					currentTarget = target;
+				}
 
 			} else if (currentTarget === "HUMAN_GATE") {
 				// Find the matching human gate definition
@@ -1125,21 +1144,32 @@ export async function executeGraph(
 					startedAt: Date.now(),
 				};
 
-				const templateContext: TemplateContext = {
-					input: state.input,
-					outputs: state.outputs,
-				};
+				try {
+					const templateContext: TemplateContext = {
+						input: state.input,
+						outputs: state.outputs,
+					};
 
-				const resolvedPrompt = resolveTemplate(nodeDef.prompt, templateContext);
-				const output = await spawnGraphNode(nodeDef, resolvedPrompt, baseDir);
+					const resolvedPrompt = resolveTemplate(nodeDef.prompt, templateContext);
+					const nodeModel = nodeDef.model || model;
+					const output = await spawnGraphNode(nodeDef, resolvedPrompt, baseDir, nodeModel);
 
-				state.outputs[nodeName] = output;
-				state.nodeStates[nodeName] = {
-					status: "done",
-					output,
-					startedAt: state.nodeStates[nodeName].startedAt,
-					completedAt: Date.now(),
-				};
+					state.outputs[nodeName] = output;
+					state.nodeStates[nodeName] = {
+						status: "done",
+						output,
+						startedAt: state.nodeStates[nodeName].startedAt,
+						completedAt: Date.now(),
+					};
+				} catch (err: any) {
+					state.nodeStates[nodeName] = {
+						status: "error",
+						error: err.message,
+						startedAt: state.nodeStates[nodeName].startedAt,
+						completedAt: Date.now(),
+					};
+					throw err; // Re-throw to hit the outer catch
+				}
 
 				// Follow outbound edge
 				const { target, warning } = findNextTarget(nodeName, graph.edges, state.outputs);
@@ -1186,8 +1216,505 @@ export async function executeGraph(
 	}
 }
 
-// ── Extension Entry Point (Phase 4 — placeholder) ──────────────────────────
+// ── Phase 4: TUI Widget ─────────────────────────────────────────────────────
+
+const GRAPHS_DIR = join(__dirname_ge, "graphs");
+
+/**
+ * Discover available .yaml graph files in the graphs/ directory.
+ */
+function discoverGraphs(): Array<{ file: string; name: string; description: string }> {
+	if (!existsSync(GRAPHS_DIR)) return [];
+	const results: Array<{ file: string; name: string; description: string }> = [];
+	try {
+		for (const file of readdirSync(GRAPHS_DIR)) {
+			if (!file.endsWith(".yaml") && !file.endsWith(".yml")) continue;
+			try {
+				const raw = readFileSync(join(GRAPHS_DIR, file), "utf-8");
+				const parsed = parseYaml(raw);
+				results.push({
+					file,
+					name: parsed?.name || file.replace(/\.ya?ml$/, ""),
+					description: parsed?.description || "",
+				});
+			} catch {}
+		}
+	} catch {}
+	return results;
+}
+
+/**
+ * Render the graph execution widget.
+ * Shows node cards with status icons, elapsed time, output previews.
+ * Loop sections show cycle counters. Cards connected by arrows.
+ */
+function renderGraphWidget(
+	state: GraphState,
+	graph: GraphDef,
+	theme: any,
+	width: number,
+): string[] {
+	const lines: string[] = [];
+	const nodeNames = Object.keys(graph.nodes);
+	if (nodeNames.length === 0) return [theme.fg("dim", "No nodes in graph")];
+
+	const statusIcon = (s: string) =>
+		s === "idle" ? "○" :
+		s === "running" ? "●" :
+		s === "done" ? "✓" : "✗";
+
+	const statusColor = (s: string) =>
+		s === "idle" ? "dim" :
+		s === "running" ? "accent" :
+		s === "done" ? "success" : "error";
+
+	const truncate = (s: string, max: number) =>
+		s.length > max ? s.slice(0, max - 3) + "..." : s;
+
+	const elapsed = (ns: NodeState) => {
+		if (!ns.startedAt) return "";
+		const end = ns.completedAt || Date.now();
+		const secs = Math.round((end - ns.startedAt) / 1000);
+		return `${secs}s`;
+	};
+
+	const outputPreview = (ns: NodeState) => {
+		if (!ns.output) return "";
+		const json = JSON.stringify(ns.output);
+		return truncate(json, Math.min(60, width - 10));
+	};
+
+	// Determine which nodes belong to loops
+	const loopMembership: Record<string, string> = {}; // nodeName -> loopName
+	if (graph.loops) {
+		for (const [loopName, loopDef] of Object.entries(graph.loops)) {
+			for (const n of loopDef.nodes) {
+				loopMembership[n] = loopName;
+			}
+		}
+	}
+
+	// Render nodes in graph order (edges define traversal), grouped by loops
+	const renderedNodes = new Set<string>();
+	const renderOrder: Array<{ type: "node"; name: string } | { type: "loop_start"; name: string } | { type: "loop_end"; name: string }> = [];
+
+	// Walk edges from START to build render order
+	const visited = new Set<string>();
+	let target = graph.edges.find(e => e.from === "START")?.to;
+	while (target && !visited.has(target) && target !== "DONE" && target !== "BLOCKED" && target !== "ERROR" && target !== "HUMAN_GATE") {
+		visited.add(target);
+
+		if (graph.loops && graph.loops[target]) {
+			// Loop section
+			const loopDef = graph.loops[target];
+			renderOrder.push({ type: "loop_start", name: target });
+			for (const n of loopDef.nodes) {
+				renderOrder.push({ type: "node", name: n });
+				renderedNodes.add(n);
+			}
+			renderOrder.push({ type: "loop_end", name: target });
+		} else if (graph.nodes[target]) {
+			renderOrder.push({ type: "node", name: target });
+			renderedNodes.add(target);
+		}
+
+		// Follow edges
+		const outbound = graph.edges.filter(e => e.from === target);
+		const next = outbound[0]?.to;
+		target = next;
+	}
+
+	// Add any nodes not yet rendered
+	for (const name of nodeNames) {
+		if (!renderedNodes.has(name)) {
+			renderOrder.push({ type: "node", name });
+		}
+	}
+
+	// Render
+	const cardWidth = Math.min(width - 2, 64);
+	const innerW = cardWidth - 4; // 2 border + 2 padding
+
+	for (let i = 0; i < renderOrder.length; i++) {
+		const item = renderOrder[i];
+
+		if (item.type === "loop_start") {
+			const loopDef = graph.loops![item.name];
+			const cycle = state.loopCycles[item.name] || 0;
+			const maxC = loopDef.max_cycles;
+			const loopLabel = loopDef.until ? `until loop` : `for_each loop`;
+			lines.push(
+				theme.fg("dim", "┌─") +
+				theme.fg("accent", ` ${item.name} `) +
+				theme.fg("dim", `(${loopLabel}, cycle ${cycle}/${maxC})`)
+			);
+			continue;
+		}
+
+		if (item.type === "loop_end") {
+			lines.push(theme.fg("dim", "└─"));
+			// Arrow to next
+			if (i < renderOrder.length - 1) {
+				lines.push(theme.fg("dim", "  ──▶"));
+			}
+			continue;
+		}
+
+		// Node card
+		const name = item.name;
+		const ns = state.nodeStates[name] || { status: "idle" as const };
+		const icon = statusIcon(ns.status);
+		const color = statusColor(ns.status);
+		const prefix = loopMembership[name] ? "│ " : "";
+
+		const nameLine = prefix + theme.fg("accent", theme.bold(truncate(name, innerW)));
+		const statusLine = prefix + theme.fg(color, `${icon} ${ns.status}`) +
+			(elapsed(ns) ? theme.fg("dim", ` ${elapsed(ns)}`) : "");
+		const preview = outputPreview(ns);
+		const previewLine = preview ? prefix + theme.fg("dim", truncate(preview, innerW)) : "";
+
+		lines.push(nameLine);
+		lines.push(statusLine);
+		if (previewLine) lines.push(previewLine);
+
+		// Arrow between nodes (not after last, not inside loop boundaries)
+		const isLastInLoop = i + 1 < renderOrder.length && renderOrder[i + 1].type === "loop_end";
+		const isLast = i === renderOrder.length - 1;
+		if (!isLast && !isLastInLoop) {
+			const nextItem = renderOrder[i + 1];
+			if (nextItem.type === "node") {
+				lines.push(prefix + theme.fg("dim", "  ──▶"));
+			}
+		}
+	}
+
+	// Graph elapsed
+	const totalElapsed = Math.round((Date.now() - state.startedAt) / 1000);
+	const graphStatus = state.status === "running" ? theme.fg("accent", "● running") :
+		state.status === "completed" ? theme.fg("success", "✓ completed") :
+		state.status === "blocked" ? theme.fg("warning", "◼ blocked") :
+		theme.fg("error", "✗ error");
+	lines.push("");
+	lines.push(graphStatus + theme.fg("dim", ` ${totalElapsed}s`));
+
+	return lines;
+}
+
+// ── Phase 4: Extension Entry Point + Commands ───────────────────────────────
 
 export default function (pi: ExtensionAPI) {
-	// Commands will be registered in Phase 4
+	let widgetCtx: ExtensionContext | null = null;
+	let activeGraphState: GraphState | null = null;
+	let activeGraph: GraphDef | null = null;
+	let widgetTimer: ReturnType<typeof setInterval> | null = null;
+
+	function updateWidget() {
+		if (!widgetCtx || !activeGraphState || !activeGraph) return;
+
+		const state = activeGraphState;
+		const graph = activeGraph;
+
+		widgetCtx.ui.setWidget("graph-engine", (_tui: any, theme: any) => {
+			const text = new Text("", 0, 1);
+
+			return {
+				render(width: number): string[] {
+					const lines = renderGraphWidget(state, graph, theme, width);
+					text.setText(lines.join("\n"));
+					return text.render(width);
+				},
+				invalidate() {
+					text.invalidate();
+				},
+			};
+		});
+	}
+
+	function clearWidget() {
+		if (widgetTimer) {
+			clearInterval(widgetTimer);
+			widgetTimer = null;
+		}
+		if (widgetCtx) {
+			widgetCtx.ui.setWidget("graph-engine", undefined);
+		}
+		activeGraphState = null;
+		activeGraph = null;
+	}
+
+	// ── /run <graph-name> command ────────────────────────────────────────────
+
+	pi.registerCommand("run", {
+		description: "Execute a YAML graph: /run <graph-name> [input]",
+		getArgumentCompletions: (prefix: string): AutocompleteItem[] | null => {
+			const graphs = discoverGraphs();
+			const items = graphs.map(g => ({
+				value: g.file.replace(/\.ya?ml$/, ""),
+				label: g.name,
+				description: g.description,
+			}));
+			if (!prefix) return items;
+			return items.filter(i => i.value.startsWith(prefix) || i.label.toLowerCase().startsWith(prefix.toLowerCase()));
+		},
+		handler: async (args, ctx) => {
+			widgetCtx = ctx;
+
+			const parts = (args || "").trim().split(/\s+/);
+			const graphName = parts[0];
+			let input = parts.slice(1).join(" ");
+
+			if (!graphName) {
+				ctx.ui.notify("Usage: /run <graph-name> [input]", "error");
+				return;
+			}
+
+			// Load graph file
+			const yamlFile = join(GRAPHS_DIR, `${graphName}.yaml`);
+			const ymlFile = join(GRAPHS_DIR, `${graphName}.yml`);
+			const filePath = existsSync(yamlFile) ? yamlFile : existsSync(ymlFile) ? ymlFile : null;
+
+			if (!filePath) {
+				ctx.ui.notify(`Graph not found: "${graphName}". Run /graphs to see available graphs.`, "error");
+				return;
+			}
+
+			// Parse
+			let graph: GraphDef;
+			try {
+				const yamlContent = readFileSync(filePath, "utf-8");
+				graph = parseGraph(yamlContent);
+			} catch (err: any) {
+				ctx.ui.notify(`Parse error: ${err.message}`, "error");
+				return;
+			}
+
+			// Validate
+			const validation = validateGraph(graph, __dirname_ge);
+			if (!validation.valid) {
+				const errMsg = validation.errors.join("\n");
+				ctx.ui.notify(`Validation failed:\n${errMsg}`, "error");
+				return;
+			}
+
+			// Prompt for input if not provided
+			if (!input) {
+				const prompted = await ctx.ui.input("Enter input for the graph");
+				if (!prompted || !prompted.trim()) {
+					ctx.ui.notify("No input provided, aborting.", "warning");
+					return;
+				}
+				input = prompted.trim();
+			}
+
+			// Determine model from ctx
+			const model = ctx.model
+				? `${ctx.model.provider}/${ctx.model.id}`
+				: undefined;
+
+			// Initialize shared graph state for TUI widget (Task 4.6)
+			const graphState: GraphState = {
+				graphName: graph.name,
+				status: "running",
+				currentNode: null,
+				currentLoop: null,
+				loopCycles: {},
+				nodeStates: {},
+				outputs: {},
+				input,
+				startedAt: Date.now(),
+			};
+
+			// Initialize all node states
+			for (const name of Object.keys(graph.nodes)) {
+				graphState.nodeStates[name] = { status: "idle" };
+			}
+
+			// Set up widget and timer (Task 4.1 + 4.6)
+			activeGraphState = graphState;
+			activeGraph = graph;
+			updateWidget();
+
+			widgetTimer = setInterval(() => {
+				updateWidget();
+			}, 1000);
+
+			// Execute graph
+			try {
+				const result = await executeGraph(
+					graph, input, __dirname_ge, ctx, pi, graphState, model,
+				);
+
+				// Update final state
+				graphState.status = result.status === "completed" ? "completed" :
+					result.status === "blocked" ? "blocked" : "error";
+				graphState.completedAt = Date.now();
+				updateWidget();
+
+				// Display results via sendMessage (AC7)
+				const resultLines: string[] = [];
+				resultLines.push(`## Graph: ${graph.name}`);
+				resultLines.push(`**Status:** ${result.status}`);
+				resultLines.push(`**Elapsed:** ${(result.elapsedMs / 1000).toFixed(1)}s`);
+				if (result.humanGateSelection) {
+					resultLines.push(`**Human Gate:** ${result.humanGateSelection}`);
+				}
+				resultLines.push("");
+
+				// Show outputs from each node
+				for (const [nodeName, output] of Object.entries(result.outputs)) {
+					if (nodeName.startsWith("__")) continue; // Skip internal keys
+					resultLines.push(`### ${nodeName}`);
+					resultLines.push("```json");
+					resultLines.push(JSON.stringify(output, null, 2));
+					resultLines.push("```");
+					resultLines.push("");
+				}
+
+				if (result.error) {
+					resultLines.push(`### Error`);
+					resultLines.push(result.error);
+				}
+
+				pi.sendMessage(
+					{
+						customType: "graph-result",
+						content: resultLines.join("\n"),
+						display: true,
+					},
+					{ triggerTurn: false },
+				);
+
+			} catch (err: any) {
+				graphState.status = "error";
+				graphState.completedAt = Date.now();
+				updateWidget();
+				ctx.ui.notify(`Graph execution failed: ${err.message}`, "error");
+			} finally {
+				// Stop timer after a delay so user sees final state
+				setTimeout(() => {
+					if (widgetTimer) {
+						clearInterval(widgetTimer);
+						widgetTimer = null;
+					}
+				}, 3000);
+			}
+		},
+	});
+
+	// ── /graphs command ──────────────────────────────────────────────────────
+
+	pi.registerCommand("graphs", {
+		description: "List available YAML graphs",
+		handler: async (_args, ctx) => {
+			widgetCtx = ctx;
+			const graphs = discoverGraphs();
+
+			if (graphs.length === 0) {
+				ctx.ui.notify("No graphs found in graphs/ directory.", "warning");
+				return;
+			}
+
+			const lines = graphs.map(g => {
+				const slug = g.file.replace(/\.ya?ml$/, "");
+				return `  ${slug}  —  ${g.name}${g.description ? `: ${g.description}` : ""}`;
+			});
+
+			ctx.ui.notify(
+				`Available graphs (${graphs.length}):\n${lines.join("\n")}`,
+				"info",
+			);
+		},
+	});
+
+	// ── /validate <graph-name> command ───────────────────────────────────────
+
+	pi.registerCommand("validate", {
+		description: "Validate a YAML graph: /validate <graph-name>",
+		getArgumentCompletions: (prefix: string): AutocompleteItem[] | null => {
+			const graphs = discoverGraphs();
+			const items = graphs.map(g => ({
+				value: g.file.replace(/\.ya?ml$/, ""),
+				label: g.name,
+				description: g.description,
+			}));
+			if (!prefix) return items;
+			return items.filter(i => i.value.startsWith(prefix) || i.label.toLowerCase().startsWith(prefix.toLowerCase()));
+		},
+		handler: async (args, ctx) => {
+			widgetCtx = ctx;
+			const graphName = (args || "").trim();
+
+			if (!graphName) {
+				ctx.ui.notify("Usage: /validate <graph-name>", "error");
+				return;
+			}
+
+			const yamlFile = join(GRAPHS_DIR, `${graphName}.yaml`);
+			const ymlFile = join(GRAPHS_DIR, `${graphName}.yml`);
+			const filePath = existsSync(yamlFile) ? yamlFile : existsSync(ymlFile) ? ymlFile : null;
+
+			if (!filePath) {
+				ctx.ui.notify(`Graph not found: "${graphName}"`, "error");
+				return;
+			}
+
+			let graph: GraphDef;
+			try {
+				const yamlContent = readFileSync(filePath, "utf-8");
+				graph = parseGraph(yamlContent);
+			} catch (err: any) {
+				ctx.ui.notify(`Parse error: ${err.message}`, "error");
+				return;
+			}
+
+			const validation = validateGraph(graph, __dirname_ge);
+
+			if (validation.valid) {
+				const nodeCount = Object.keys(graph.nodes).length;
+				const loopCount = Object.keys(graph.loops || {}).length;
+				const gateCount = (graph.human_gates || []).length;
+				ctx.ui.notify(
+					`Graph "${graph.name}" is valid\n` +
+					`  Nodes: ${nodeCount}, Loops: ${loopCount}, Gates: ${gateCount}`,
+					"info",
+				);
+			} else {
+				ctx.ui.notify(
+					`Validation failed (${validation.errors.length} errors):\n` +
+					validation.errors.map(e => `  - ${e}`).join("\n"),
+					"error",
+				);
+			}
+
+			if (validation.warnings.length > 0) {
+				ctx.ui.notify(
+					`Warnings:\n` + validation.warnings.map(w => `  - ${w}`).join("\n"),
+					"warning",
+				);
+			}
+		},
+	});
+
+	// ── Session Start ────────────────────────────────────────────────────────
+
+	pi.on("session_start", async (_event, ctx) => {
+		widgetCtx = ctx;
+
+		// Discover graphs
+		const graphs = discoverGraphs();
+		const graphList = graphs.length > 0
+			? graphs.map(g => `  ${g.file.replace(/\.ya?ml$/, "")}`).join("\n")
+			: "  (none found)";
+
+		ctx.ui.setStatus("graph-engine", "Graph Engine ready");
+		ctx.ui.notify(
+			`Graph Engine loaded\n\n` +
+			`Commands:\n` +
+			`  /run <graph-name> [input]  — Execute a graph\n` +
+			`  /graphs                    — List available graphs\n` +
+			`  /validate <graph-name>     — Validate a graph\n\n` +
+			`Discovered graphs:\n${graphList}`,
+			"info",
+		);
+	});
 }
