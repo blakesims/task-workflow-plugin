@@ -6,8 +6,8 @@
 import { readFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
-import { parseGraph, validateGraph, resolveTemplate, evaluateCondition, findNextTarget } from "./graph-engine.js";
-import type { TemplateContext, EdgeDef } from "./graph-engine.js";
+import { parseGraph, validateGraph, resolveTemplate, evaluateCondition, findNextTarget, discoverGraphs, renderGraphWidget } from "./graph-engine.js";
+import type { TemplateContext, EdgeDef, GraphState, GraphDef, NodeState } from "./graph-engine.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -463,6 +463,164 @@ edges:
 const graphWhen = parseGraph(yamlWithWhen);
 assert(graphWhen.edges[1].when === "a.output.ready === 'yes'", "when field parsed from YAML");
 assert(graphWhen.edges[0].when === undefined, "edge without when has undefined");
+
+// ── Phase 4: discoverGraphs() ───────────────────────────────────────────────
+
+console.log("\n== Phase 4: discoverGraphs() ==");
+
+{
+	const graphs = discoverGraphs();
+	assert(graphs.length >= 1, "discoverGraphs finds at least 1 graph");
+	const grinder = graphs.find(g => g.file === "investigation-grinder.yaml");
+	assert(grinder !== undefined, "discoverGraphs finds investigation-grinder.yaml");
+	assert(grinder!.name === "investigation-grinder", "discoverGraphs extracts name from YAML");
+	assert(typeof grinder!.description === "string" && grinder!.description.length > 0, "discoverGraphs extracts description");
+}
+
+// ── Phase 4: renderGraphWidget() ────────────────────────────────────────────
+
+console.log("\n== Phase 4: renderGraphWidget() ==");
+
+{
+	// Build a minimal graph + state to test render order derivation
+	const testGraph: GraphDef = {
+		name: "test-render",
+		description: "render test",
+		nodes: {
+			a: { persona: "p.md", schema: "s.json", prompt: "test" },
+			b: { persona: "p.md", schema: "s.json", prompt: "test" },
+			c: { persona: "p.md", schema: "s.json", prompt: "test" },
+		},
+		edges: [
+			{ from: "START", to: "a" },
+			{ from: "a", to: "b" },
+			{ from: "b", to: "c" },
+			{ from: "c", to: "DONE" },
+		],
+	};
+
+	const testState: GraphState = {
+		graphName: "test-render",
+		status: "running",
+		currentNode: "b",
+		currentLoop: null,
+		loopCycles: {},
+		nodeStates: {
+			a: { status: "done", startedAt: 1000, completedAt: 5000, output: { result: "ok" } },
+			b: { status: "running", startedAt: 6000 },
+			c: { status: "idle" },
+		},
+		outputs: {},
+		input: "test",
+		startedAt: 1000,
+	};
+
+	// Mock theme that returns raw strings (no ANSI codes)
+	const mockTheme = {
+		fg: (_color: string, text: string) => text,
+		bold: (text: string) => text,
+	};
+
+	const lines = renderGraphWidget(testState, testGraph, mockTheme, 80);
+	const joined = lines.join("\n");
+
+	assert(lines.length > 0, "renderGraphWidget produces output lines");
+	assert(joined.includes("a"), "widget shows node 'a'");
+	assert(joined.includes("b"), "widget shows node 'b'");
+	assert(joined.includes("c"), "widget shows node 'c'");
+	assert(joined.includes("✓"), "widget shows done icon for completed node");
+	assert(joined.includes("●"), "widget shows running icon for active node");
+	assert(joined.includes("○"), "widget shows idle icon for waiting node");
+	assert(joined.includes("running"), "widget shows graph running status");
+
+	// Verify render order matches edge traversal (a before b before c)
+	const aIdx = joined.indexOf("\na") !== -1 ? joined.indexOf("\na") : joined.indexOf("a");
+	const bIdx = joined.indexOf("\nb") !== -1 ? joined.indexOf("\nb") : joined.indexOf("b");
+	const cIdx = joined.indexOf("\nc") !== -1 ? joined.indexOf("\nc") : joined.indexOf("c");
+	assert(aIdx < bIdx && bIdx < cIdx, "render order follows edge traversal: a -> b -> c");
+}
+
+// Test renderGraphWidget with a loop section
+{
+	const loopGraph: GraphDef = {
+		name: "test-loop-render",
+		description: "loop render test",
+		nodes: {
+			investigator: { persona: "p.md", schema: "s.json", prompt: "test" },
+			reviewer: { persona: "p.md", schema: "s.json", prompt: "test" },
+		},
+		edges: [
+			{ from: "START", to: "review_loop" },
+			{ from: "review_loop", to: "DONE" },
+		],
+		loops: {
+			review_loop: {
+				nodes: ["investigator", "reviewer"],
+				until: "reviewer.output.decision === 'PASS'",
+				max_cycles: 3,
+				on_max: "BLOCKED",
+			},
+		},
+	};
+
+	const loopState: GraphState = {
+		graphName: "test-loop-render",
+		status: "running",
+		currentNode: "reviewer",
+		currentLoop: "review_loop",
+		loopCycles: { review_loop: 2 },
+		nodeStates: {
+			investigator: { status: "done", startedAt: 1000, completedAt: 3000 },
+			reviewer: { status: "running", startedAt: 4000 },
+		},
+		outputs: {},
+		input: "test",
+		startedAt: 1000,
+	};
+
+	const mockTheme = {
+		fg: (_color: string, text: string) => text,
+		bold: (text: string) => text,
+	};
+
+	const lines = renderGraphWidget(loopState, loopGraph, mockTheme, 80);
+	const joined = lines.join("\n");
+
+	assert(joined.includes("review_loop"), "loop section shows loop name");
+	assert(joined.includes("2/3"), "loop section shows cycle counter (2/3)");
+	assert(joined.includes("until loop"), "loop section shows loop type");
+}
+
+// Test renderGraphWidget with empty graph
+{
+	const emptyGraph: GraphDef = {
+		name: "empty",
+		description: "",
+		nodes: {},
+		edges: [],
+	};
+
+	const emptyState: GraphState = {
+		graphName: "empty",
+		status: "running",
+		currentNode: null,
+		currentLoop: null,
+		loopCycles: {},
+		nodeStates: {},
+		outputs: {},
+		input: "",
+		startedAt: Date.now(),
+	};
+
+	const mockTheme = {
+		fg: (_color: string, text: string) => text,
+		bold: (text: string) => text,
+	};
+
+	const lines = renderGraphWidget(emptyState, emptyGraph, mockTheme, 80);
+	assert(lines.length > 0, "empty graph still produces output");
+	assert(lines.some(l => l.includes("No nodes")), "empty graph shows 'No nodes' message");
+}
 
 // ── Summary ──────────────────────────────────────────────────────────────────
 

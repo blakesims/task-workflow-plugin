@@ -4,7 +4,27 @@ import { existsSync, readFileSync, readdirSync } from "fs";
 import { spawn } from "child_process";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
-import { Text, type AutocompleteItem, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+// pi-tui is only available inside Pi runtime — lazy-loaded to avoid breaking tests
+let Text: any;
+let _tuiLoaded = false;
+
+async function loadTuiModules() {
+	if (_tuiLoaded) return;
+	try {
+		const tui = await import("@mariozechner/pi-tui");
+		Text = tui.Text;
+		_tuiLoaded = true;
+	} catch {
+		// Not in Pi runtime (tests) — Text stays null, widget is a no-op
+	}
+}
+
+/** Local type matching pi-tui's AutocompleteItem to avoid top-level import */
+interface AutocompleteItem {
+	value: string;
+	label: string;
+	description?: string;
+}
 
 // ── Phase 1: Types ──────────────────────────────────────────────────────────
 
@@ -1060,7 +1080,7 @@ export async function executeGraph(
 				const loopDef = graph.loops[currentTarget];
 				const loopName = currentTarget;
 
-				let loopResult: { status: string; warning?: string };
+				let loopResult: { status: string; warning?: string; routeTo?: string };
 
 				if (loopDef.until) {
 					loopResult = await executeUntilLoop(
@@ -1223,7 +1243,7 @@ const GRAPHS_DIR = join(__dirname_ge, "graphs");
 /**
  * Discover available .yaml graph files in the graphs/ directory.
  */
-function discoverGraphs(): Array<{ file: string; name: string; description: string }> {
+export function discoverGraphs(): Array<{ file: string; name: string; description: string }> {
 	if (!existsSync(GRAPHS_DIR)) return [];
 	const results: Array<{ file: string; name: string; description: string }> = [];
 	try {
@@ -1248,7 +1268,7 @@ function discoverGraphs(): Array<{ file: string; name: string; description: stri
  * Shows node cards with status icons, elapsed time, output previews.
  * Loop sections show cycle counters. Cards connected by arrows.
  */
-function renderGraphWidget(
+export function renderGraphWidget(
 	state: GraphState,
 	graph: GraphDef,
 	theme: any,
@@ -1408,26 +1428,37 @@ export default function (pi: ExtensionAPI) {
 	let activeGraph: GraphDef | null = null;
 	let widgetTimer: ReturnType<typeof setInterval> | null = null;
 
+	let widgetFactorySet = false;
+	let isRunning = false;
+
 	function updateWidget() {
 		if (!widgetCtx || !activeGraphState || !activeGraph) return;
 
 		const state = activeGraphState;
 		const graph = activeGraph;
 
-		widgetCtx.ui.setWidget("graph-engine", (_tui: any, theme: any) => {
-			const text = new Text("", 0, 1);
+		if (!widgetFactorySet) {
+			// Set the widget factory once — subsequent updates re-render via shared state
+			widgetCtx.ui.setWidget("graph-engine", (_tui: any, theme: any) => {
+				if (!Text) return { render: () => [], invalidate: () => {} };
+				const text = new Text("", 0, 1);
 
-			return {
-				render(width: number): string[] {
-					const lines = renderGraphWidget(state, graph, theme, width);
-					text.setText(lines.join("\n"));
-					return text.render(width);
-				},
-				invalidate() {
-					text.invalidate();
-				},
-			};
-		});
+				return {
+					render(width: number): string[] {
+						// Reads from the shared mutable state/graph refs
+						const currentState = activeGraphState || state;
+						const currentGraph = activeGraph || graph;
+						const lines = renderGraphWidget(currentState, currentGraph, theme, width);
+						text.setText(lines.join("\n"));
+						return text.render(width);
+					},
+					invalidate() {
+						text.invalidate();
+					},
+				};
+			});
+			widgetFactorySet = true;
+		}
 	}
 
 	function clearWidget() {
@@ -1440,6 +1471,7 @@ export default function (pi: ExtensionAPI) {
 		}
 		activeGraphState = null;
 		activeGraph = null;
+		widgetFactorySet = false;
 	}
 
 	// ── /run <graph-name> command ────────────────────────────────────────────
@@ -1458,6 +1490,11 @@ export default function (pi: ExtensionAPI) {
 		},
 		handler: async (args, ctx) => {
 			widgetCtx = ctx;
+
+			if (isRunning) {
+				ctx.ui.notify("A graph is already executing. Wait for it to finish.", "warning");
+				return;
+			}
 
 			const parts = (args || "").trim().split(/\s+/);
 			const graphName = parts[0];
@@ -1539,6 +1576,7 @@ export default function (pi: ExtensionAPI) {
 			}, 1000);
 
 			// Execute graph
+			isRunning = true;
 			try {
 				const result = await executeGraph(
 					graph, input, __dirname_ge, ctx, pi, graphState, model,
@@ -1590,12 +1628,10 @@ export default function (pi: ExtensionAPI) {
 				updateWidget();
 				ctx.ui.notify(`Graph execution failed: ${err.message}`, "error");
 			} finally {
-				// Stop timer after a delay so user sees final state
+				isRunning = false;
+				// Stop timer after a delay so user sees final state, then clean up widget
 				setTimeout(() => {
-					if (widgetTimer) {
-						clearInterval(widgetTimer);
-						widgetTimer = null;
-					}
+					clearWidget();
 				}, 3000);
 			}
 		},
@@ -1699,6 +1735,12 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("session_start", async (_event, ctx) => {
 		widgetCtx = ctx;
+
+		// Clean slate: clear stale widget from previous session
+		clearWidget();
+
+		// Load pi-tui modules (only succeeds inside Pi runtime)
+		await loadTuiModules();
 
 		// Discover graphs
 		const graphs = discoverGraphs();
