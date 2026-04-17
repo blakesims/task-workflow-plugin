@@ -198,7 +198,7 @@ If the project has `./dev pr prep`, run that instead — it handles `_feat_` mig
 **Use the Skill tool to run the local CodeRabbit review:**
 
 ```
-Skill(skill="coderabbit:review", args="committed --base main")
+Skill(skill="coderabbit:review", args="all --base main")
 ```
 
 Do NOT wait for GitHub's CodeRabbit bot on a PR — that is slower and less controllable. The local CLI review is the authoritative Stage 6 gate.
@@ -214,7 +214,7 @@ If the first run returns "No findings" on a non-trivial diff (>50 lines changed)
 1. Read all findings
 2. Fix actionable issues (same rules as code review gate — minor fixes inline, substantial fixes via executor)
 3. Dismiss out-of-scope suggestions with a brief rationale
-4. If fixes were needed, re-run: `Skill(skill="coderabbit:review", args="committed --base main")` to confirm clean
+4. If fixes were needed, re-run: `Skill(skill="coderabbit:review", args="all --base main")` to confirm clean
 
 ## Stage 7: Completion
 

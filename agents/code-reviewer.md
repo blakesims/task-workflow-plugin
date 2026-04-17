@@ -4,6 +4,7 @@ description: Reviews code after execution. Use after phase execution completes, 
 skills:
   - review-code
   - task-workflow
+effort: xhigh
 ---
 
 # Code Reviewer Agent

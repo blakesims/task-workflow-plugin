@@ -4,6 +4,7 @@ description: Reviews implementation plans. Use after planning completes, when as
 skills:
   - review-plan
   - task-workflow
+effort: xhigh
 ---
 
 # Plan Reviewer Agent

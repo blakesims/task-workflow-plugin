@@ -4,6 +4,7 @@ description: Creates implementation plans for tasks. Use when starting a new tas
 skills:
   - plan
   - task-workflow
+effort: xhigh
 ---
 
 # Planner Agent

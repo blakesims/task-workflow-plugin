@@ -4,6 +4,7 @@ description: Executes implementation phases. Use when ready to implement, execut
 skills:
   - execute
   - task-workflow
+model: sonnet
 ---
 
 # Executor Agent
