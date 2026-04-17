@@ -193,15 +193,18 @@ git push --force-with-lease
 
 If the project has `./dev pr prep`, run that instead — it handles `_feat_` migration cleanup and tests.
 
-### 6b. Run CodeRabbit (MANDATORY — do not skip)
+### 6b. Run CodeRabbit locally (MANDATORY — do not skip)
 
-**Use the Skill tool to run the local CodeRabbit review:**
+**Use the local CodeRabbit CLI only.** Do NOT create a GitHub PR for the bot, do NOT wait 15min for PR comments, do NOT pull bot comments from `gh api`. The local `--type all` CLI review is the authoritative Stage 6 gate — it is fast, deterministic, and sufficient for cross-phase holistic review.
 
+```bash
+cr review --type all --base main --plain
 ```
-Skill(skill="coderabbit:review", args="all --base main")
-```
 
-Do NOT wait for GitHub's CodeRabbit bot on a PR — that is slower and less controllable. The local CLI review is the authoritative Stage 6 gate.
+**Flags (IMPORTANT):**
+- `--type all` — required. `--type committed` produces shallow reviews that miss real issues.
+- `--base main` — required. Reviews only feature-branch changes vs main.
+- `--plain` — required. The `--agent` structured mode has a confirmed bug that drops findings and returns 0.
 
 This catches cross-phase issues that per-phase reviews miss (inconsistencies between phases, holistic type safety, missed edge cases at boundaries).
 
@@ -211,10 +214,10 @@ If the first run returns "No findings" on a non-trivial diff (>50 lines changed)
 
 ### 6c. Process findings
 
-1. Read all findings
+1. Read all findings from the CLI output
 2. Fix actionable issues (same rules as code review gate — minor fixes inline, substantial fixes via executor)
 3. Dismiss out-of-scope suggestions with a brief rationale
-4. If fixes were needed, re-run: `Skill(skill="coderabbit:review", args="all --base main")` to confirm clean
+4. If fixes were needed, re-run `cr review --type all --base main --plain` until clean
 
 ## Stage 7: Completion
 
