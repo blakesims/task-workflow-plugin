@@ -5,6 +5,7 @@ description: >
   on tasks in a tasks/ directory. Defines main.md format and agent responsibilities.
 source_repo: ~/repos/task-workflow-plugin
 source_path: skills/task-workflow/SKILL.md
+disable-model-invocation: true
 ---
 
 # Task Workflow

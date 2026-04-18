@@ -5,6 +5,7 @@ description: >
   update plan if needed. Use between phases to ensure continuity.
 source_repo: ~/repos/task-workflow-plugin
 source_path: skills/review-phase/SKILL.md
+disable-model-invocation: true
 ---
 
 # Phase Review Skill

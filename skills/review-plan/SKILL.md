@@ -5,6 +5,7 @@ description: >
   Use when asked to review a plan or after planning completes.
 source_repo: ~/repos/task-workflow-plugin
 source_path: skills/review-plan/SKILL.md
+disable-model-invocation: true
 ---
 
 # Plan Review Skill

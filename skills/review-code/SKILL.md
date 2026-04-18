@@ -5,6 +5,7 @@ description: >
   find bugs and edge cases. Use after phase execution.
 source_repo: ~/repos/task-workflow-plugin
 source_path: skills/review-code/SKILL.md
+disable-model-invocation: true
 ---
 
 # Code Review Skill

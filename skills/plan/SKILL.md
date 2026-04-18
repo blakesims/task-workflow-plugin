@@ -5,6 +5,7 @@ description: >
   or start a new task. Outputs to main.md in the task directory.
 source_repo: ~/repos/task-workflow-plugin
 source_path: skills/plan/SKILL.md
+disable-model-invocation: true
 ---
 
 # Planning Skill

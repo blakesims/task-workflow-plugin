@@ -5,6 +5,7 @@ description: >
   run tests. Use when asked to execute, implement, or work on a specific phase.
 source_repo: ~/repos/task-workflow-plugin
 source_path: skills/execute/SKILL.md
+disable-model-invocation: true
 ---
 
 # Execute Skill

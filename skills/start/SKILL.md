@@ -4,6 +4,7 @@ description: >
   Start the autonomous multi-agent development workflow. Use when the user
   explicitly wants task-workflow to run the core development cycle end-to-end.
 user_invocable: true
+disable-model-invocation: true
 ---
 
 You are coordinating agents from the task-workflow plugin.
