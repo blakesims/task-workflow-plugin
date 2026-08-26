@@ -3,7 +3,7 @@ name: execute
 description: >
   Execute a phase of an implementation plan. Follow tasks exactly, write code,
   run tests. Use when asked to execute, implement, or work on a specific phase.
-source_repo: ~/repos/task-workflow-plugin
+source_repo: https://github.com/blakesims/task-workflow-plugin
 source_path: skills/execute/SKILL.md
 disable-model-invocation: true
 ---
@@ -36,7 +36,7 @@ Planner → Plan Reviewer → GATE → [Executor] → Code Reviewer → ...
 2. **EXECUTE** tasks in order — do not skip or reorder
 3. **RUN** tests after each task — never proceed with failing tests
 4. **NEVER** lie about tests passing
-5. **COMMIT** after each logical unit of work
+5. **LEAVE SOURCE UNCOMMITTED** for code review; the parent commits only after `PASS`
 6. **STOP** if blocked — do not improvise
 7. **UPDATE** `main.md` Execution Log section
 
@@ -60,7 +60,7 @@ For each task:
 2. Implement changes
 3. Run relevant tests
 4. Verify change works
-5. Commit with clear message
+5. Record the changed paths and validation evidence; do not commit
 
 ### Step 4: Verify Acceptance Criteria
 - Check each AC explicitly
@@ -76,7 +76,7 @@ For each task:
 - **Status:** COMPLETE | BLOCKED
 - **Started:** {date}
 - **Completed:** {date}
-- **Commits:** `abc123`, `def456`
+- **Commit:** — (parent fills after review `PASS`)
 - **Files Modified:**
   - `path/file.ts` — {what changed}
   - `path/other.ts` — {what changed}
@@ -104,7 +104,7 @@ Then update Status:
 **DO:**
 - Follow existing code patterns
 - Write tests for new functionality
-- Keep commits atomic
+- Keep the phase diff focused and reviewable
 - Report progress on each task
 - Fix obvious typos/errors in the plan (file paths, variable names)
 
@@ -156,13 +156,4 @@ Do NOT:
 - Implement workarounds outside plan
 - Skip the task and continue
 
-## Commit Message Format
-
-```
-Phase{N}.{task}: {brief description}
-
-- {detail}
-- {detail}
-
-AC: #{ac_number}
-```
+The parent orchestrator owns explicit-path staging and commits after the code-review gate returns `PASS`.

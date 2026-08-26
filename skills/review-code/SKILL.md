@@ -3,7 +3,7 @@ name: review-code
 description: >
   Adversarial code review of executed phases. Verify implementation matches plan,
   find bugs and edge cases. Use after phase execution.
-source_repo: ~/repos/task-workflow-plugin
+source_repo: https://github.com/blakesims/task-workflow-plugin
 source_path: skills/review-code/SKILL.md
 disable-model-invocation: true
 ---
@@ -48,7 +48,7 @@ Planner → Plan Reviewer → Executor → [Code Reviewer] → Phase Reviewer �
 ### Step 1: Git Reality Check
 
 ```bash
-git diff --name-only HEAD~{n_commits}
+git diff --name-only {phase_baseline_sha}
 git status --porcelain
 git log --oneline -10
 ```
@@ -91,8 +91,8 @@ For each acceptance criterion:
 ```
 
 Update Status based on gate:
-- **PASS + more phases:** `Status: EXECUTING_PHASE_{N+1}`
-- **PASS + last phase:** `Status: MERGE_REVIEW`
+- **PASS + more phases:** parent routes through phase review / next phase
+- **PASS + last phase:** parent runs final holistic review and completion
 - **REVISE:** `Status: EXECUTING_PHASE_{N}` (back to executor)
 - **FAIL:** `Status: BLOCKED`, `Blocked Reason: Code review failed, needs re-planning`
 

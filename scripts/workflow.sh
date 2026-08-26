@@ -142,13 +142,13 @@ SCHEMA=$(cat "$SCHEMA_FILE")
 # Build allowed tools based on agent
 case "$AGENT" in
   planner|plan-reviewer|code-reviewer)
-    ALLOWED_TOOLS="Read,Glob,Grep,Bash(git *)"
+    ALLOWED_TOOLS="Read,Write,Edit,Glob,Grep,Bash"
     ;;
   executor)
     ALLOWED_TOOLS="Read,Write,Edit,Glob,Grep,Bash"
     ;;
   phase-reviewer)
-    ALLOWED_TOOLS="Read,Edit,Glob,Grep,Bash(git *)"
+    ALLOWED_TOOLS="Read,Write,Edit,Glob,Grep,Bash"
     ;;
 esac
 

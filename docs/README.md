@@ -1,10 +1,18 @@
 # Task Workflow Plugin
 
-A Claude Code plugin for multi-agent task workflows with planning, review, execution, and code review.
+A Claude Code plugin for intent-led, reviewed multi-agent development workflows.
 
 ## Overview
 
-This plugin provides a structured development workflow where specialized agents handle different phases of task completion:
+The canonical entry point is:
+
+```text
+/task-workflow:task-start
+```
+
+`/task-workflow:start` remains as a compatibility alias.
+
+The orchestrator forms an Intent Contract and `DONE_WHEN`, optionally hardens intent, chooses current branch / feature branch / worktree from repository context, and routes specialist agents through durable review gates:
 
 ```
 Human → Planner → Plan Reviewer → GATE → Executor → Code Reviewer → ...
@@ -20,9 +28,10 @@ Human → Planner → Plan Reviewer → GATE → Executor → Code Reviewer → 
 claude --plugin-dir /path/to/task-workflow-plugin
 ```
 
-### From Marketplace (coming soon)
-```
-/plugin install task-workflow
+### From Marketplace
+```bash
+claude plugin marketplace add blakesims/task-workflow-plugin
+claude plugin install task-workflow@task-workflow-marketplace
 ```
 
 ## Agents
@@ -48,8 +57,8 @@ tasks/
 │       ├── plan-review.md       # Detailed plan review
 │       └── code-review-phase-1.md
 ├── planning/
-├── completed/
-└── archived/
+├── paused/
+└── completed/
 ```
 
 ### Templates
@@ -58,7 +67,14 @@ The `templates/` directory contains:
 - `global-task-manager.md` — Initialize your task index
 - `main.md` — Template for new task documents
 
-Copy these to your project's `tasks/` directory to get started.
+Initialize a project's task files with:
+
+```bash
+mkdir -p tasks/{planning,active,paused,completed}
+cp templates/main.md tasks/main-template.md
+cp templates/global-task-manager.md tasks/global-task-manager.md
+cp templates/CLAUDE.md tasks/CLAUDE.md
+```
 
 ### main.md Format
 
@@ -89,16 +105,22 @@ Copy these to your project's `tasks/` directory to get started.
 {Final summary}
 ```
 
+## Git strategy
+
+The workflow is branch-agnostic. It does not impose `main`, feature branches, or worktrees globally. The parent records a runtime strategy from repository instructions, Git state, concurrency, and delivery expectations while preserving clean baselines and explicit reviewed-path staging.
+
+Push, PR, merge, deployment, force-push, and branch deletion require explicit authorization or an already-authorized repository workflow.
+
 ## Structured Output
 
-Agents produce structured JSON output conforming to schemas in `schemas/`. This enables:
+External CLI orchestration can request structured JSON conforming to schemas in `schemas/`; the canonical interactive task-start flow uses durable Markdown task artifacts. JSON mode enables:
 - **Enforcement** — Agents must confirm checklist completion
 - **Gate clarity** — Orchestrator parses gate decisions directly
 - **Audit trail** — JSON outputs can be logged
 
 Example usage:
 ```bash
-claude --agent planner \
+claude --agent task-workflow:planner \
   --output-format json \
   --json-schema "$(cat schemas/planner-output.json)" \
   -p "Create plan for: {task}"
@@ -106,13 +128,19 @@ claude --agent planner \
 
 ## Skills
 
-Skills are loaded automatically via agent frontmatter:
+Canonical orchestration skills:
+
+- `task-start` — Intent Contract, optional hardening, handoff packet, runtime strategy, agent gates, and completion
+- `intent-harden` — optional expansion/compression/stress-test pass before planning
+- `start` — compatibility alias for `task-start`
+- `task-workflow` — shared task ledger and Git-safety contract
+
+Legacy specialist reference skills remain available for compatibility:
 - `plan` — Planning workflow and templates
 - `execute` — Execution workflow
 - `review-plan` — Plan review checklist
 - `review-code` — Code review checklist
 - `review-phase` — Phase transition workflow
-- `task-workflow` — Shared knowledge about task structure
 
 ## Self-Improvement
 
@@ -128,6 +156,15 @@ Review observations periodically to refine agents and schemas.
 
 - [Architecture](./architecture.md) — Full system design and invocation patterns
 - [Lessons Learned](./lessons-learned.md) — First live test results and gotchas
+
+## Validation
+
+Before release or PR review:
+
+```bash
+python3 scripts/validate-plugin.py
+claude plugin validate .
+```
 
 ## License
 

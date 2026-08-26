@@ -47,14 +47,16 @@ claude --agent task-workflow:planner \
 
 ### 2. Claude Code as Orchestrator
 
-Use the Task tool with `subagent_type`:
+Use the current `Agent` tool with a namespaced `subagent_type`:
 
 ```
-Task(
+Agent(
   subagent_type="task-workflow:planner",
   prompt="Create plan for T007..."
 )
 ```
+
+The canonical `/task-workflow:task-start` skill creates these calls and routes their gates automatically.
 
 **Pros:**
 - Native integration, no PTY issues
@@ -119,14 +121,14 @@ Environment variables:
 ### Recommended Tool Permissions
 
 ```bash
-# Read-only agents (planner, plan-reviewer, code-reviewer)
---allowedTools "Read,Glob,Grep,Bash(git *)"
+# Planner and reviewers write durable task/review artifacts and run validation
+--allowedTools "Read,Write,Edit,Glob,Grep,Bash"
 
 # Executor (needs write access)
 --allowedTools "Read,Write,Edit,Glob,Grep,Bash"
 
 # Phase-reviewer (can update plan)
---allowedTools "Read,Edit,Glob,Grep,Bash(git *)"
+--allowedTools "Read,Write,Edit,Glob,Grep,Bash"
 ```
 
 ### Full Command Template

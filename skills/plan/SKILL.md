@@ -3,7 +3,7 @@ name: plan
 description: >
   Create implementation plans for tasks. Use when asked to plan, create a plan,
   or start a new task. Outputs to main.md in the task directory.
-source_repo: ~/repos/task-workflow-plugin
+source_repo: https://github.com/blakesims/task-workflow-plugin
 source_path: skills/plan/SKILL.md
 disable-model-invocation: true
 ---

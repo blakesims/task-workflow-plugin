@@ -9,10 +9,10 @@
   "plugins": [
     {
       "name": "task-workflow",
-      "description": "Multi-agent task workflow with planning, review, execution, and code review. Provides structured development cycles with file-based handoffs and gate decisions.",
+      "description": "Canonical intent-led task workflow with runtime Git strategy, specialist agents, durable review artifacts, and gated phased execution.",
       "source": "./",
       "category": "development",
-      "version": "0.1.0"
+      "version": "0.3.0"
     }
   ]
 }

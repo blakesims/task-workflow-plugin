@@ -13,7 +13,7 @@
         "set_executing_status",
         "executed_tasks",
         "ran_tests",
-        "committed_changes",
+        "left_changes_uncommitted",
         "updated_main_md",
         "set_final_status"
       ],
@@ -22,7 +22,7 @@
         "set_executing_status": { "type": "boolean" },
         "executed_tasks": { "type": "boolean" },
         "ran_tests": { "type": "boolean" },
-        "committed_changes": { "type": "boolean" },
+        "left_changes_uncommitted": { "type": "boolean", "const": true },
         "updated_main_md": { "type": "boolean" },
         "set_final_status": { "type": "boolean" }
       }
@@ -50,10 +50,9 @@
       "minimum": 1,
       "description": "Total tasks in the phase"
     },
-    "commits": {
-      "type": "array",
-      "description": "Commit hashes created",
-      "items": { "type": "string" }
+    "phase_baseline_sha": {
+      "type": "string",
+      "description": "Recorded Git baseline reviewed for this phase"
     },
     "files_modified": {
       "type": "array",
