@@ -9,6 +9,8 @@ logs/*.jsonl
 *.swp
 *.swo
 *~
+__pycache__/
+*.py[cod]
 
 # Prevent recursive self-symlink (plugin loader artifact)
 task-workflow-plugin

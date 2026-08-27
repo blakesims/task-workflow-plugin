@@ -2,164 +2,130 @@
 
 A Claude Code plugin for intent-led, reviewed multi-agent development workflows.
 
-## Overview
+## Before you start: trust and Git boundaries
 
-The canonical entry point is:
+This workflow delegates to **high-trust agents with Bash, Edit, and Write
+access**. Use it only in a repository you trust and can restore. Start from a
+**clean repository on a feature branch** unless project instructions explicitly
+select another isolated strategy. The orchestrator may choose a worktree for a
+dirty/shared checkout; it must never stash, reset, delete, stage, or commit
+unrelated human work.
+
+The workflow **auto-commits locally after each code-review `PASS`**, staging only
+explicit reviewed paths. It does **not** automatically push, open or merge a PR,
+deploy, force-push, or delete branches. Those delivery actions require explicit
+authorization or an already-authorized repository workflow.
+
+## Canonical entry point
 
 ```text
 /task-workflow:task-start
 ```
 
-`/task-workflow:start` remains as a compatibility alias.
+`/task-workflow:start` is a compatibility alias. `task-start` forms an Intent
+Contract and `DONE_WHEN`, optionally hardens intent, records the Git strategy,
+and routes work through either:
 
-The orchestrator forms an Intent Contract and `DONE_WHEN`, optionally hardens intent, chooses current branch / feature branch / worktree from repository context, and routes the task into a lane: **quickfix** (small bounded change — planning skipped, code review kept) or **planned** (phased plan with review gates). Specialist agents then run through durable review gates:
+- **quickfix** — one bounded implementation phase with full code review; or
+- **planned** — planner, plan reviewer, then executor/code-reviewer per phase.
 
-```
-Human → Planner → Plan Reviewer → GATE → Executor → Code Reviewer → ...
-                        ↓                               ↓
-                    BLOCKED                         REVISE/FAIL
-                  (questions)                      (back to executor/planner)
-```
-
-## Installation
-
-### Local Development
-```bash
-claude --plugin-dir /path/to/task-workflow-plugin
+```text
+Human → Intent + Handoff → Planner → Plan Reviewer → Executor → Code Reviewer
+                              (planned lane)          ↖ REVISE
 ```
 
-### From Marketplace
+## Install
+
+From the marketplace:
+
 ```bash
 claude plugin marketplace add blakesims/task-workflow-plugin
 claude plugin install task-workflow@task-workflow-marketplace
 ```
 
-## Agents
+For local development:
 
-| Agent | Purpose | Gate Decisions |
-|-------|---------|----------------|
-| `planner` | Creates implementation plans | → PLAN_REVIEW |
-| `plan-reviewer` | Reviews plans, validates questions | READY / NEEDS_WORK / NOT_READY |
-| `executor` | Implements phases | COMPLETE / BLOCKED |
-| `code-reviewer` | Reviews implementations | PASS / REVISE / FAIL |
-
-## Task Structure
-
-Tasks live in a `tasks/` directory:
-
+```bash
+claude --plugin-dir /path/to/task-workflow-plugin
 ```
+
+Then invoke `/task-workflow:task-start` in the trusted target repository. The
+first run bootstraps `tasks/` from `templates/`.
+
+## Agents and gates
+
+| Agent | Purpose | Gate |
+|---|---|---|
+| `planner` | Creates an implementation plan | submits for review |
+| `plan-reviewer` | Checks plan alignment and validation | `READY` / `NEEDS_WORK` / `NOT_READY` |
+| `executor` | Implements one phase without committing | `COMPLETE` / `BLOCKED` |
+| `code-reviewer` | Reviews Git reality and tests | `PASS` / `REVISE` / `FAIL` |
+
+All four roles can receive Bash/Edit/Write-capable tool access because planners
+and reviewers persist task artifacts and run validation. The code reviewer may
+edit only its declared review artifacts, not source code.
+
+## Task ledger
+
+```text
 tasks/
-├── global-task-manager.md   # INDEX of all tasks (orchestrator maintains)
-├── active/
-│   └── T008-feature/
-│       ├── main.md              # Living task document
-│       ├── plan-review.md       # Detailed plan review
-│       └── code-review-phase-1.md
+├── global-task-manager.md
 ├── planning/
+├── active/TXXX-task/
+│   ├── main.md
+│   ├── plan-review.md
+│   └── code-review-phase-N.md
 ├── paused/
 └── completed/
 ```
 
-### Templates
+`templates/main.md`, `templates/global-task-manager.md`, and
+`templates/CLAUDE.md` are copied during bootstrap. `main.md` records the Intent
+Contract, verbatim `DONE_WHEN`, lane, branch/worktree strategy, baseline SHA,
+plan, execution evidence, reviews, and completion evidence.
 
-The `templates/` directory contains:
-- `global-task-manager.md` — Initialize your task index
-- `main.md` — Template for new task documents
+## Advanced integration surfaces
 
-No manual setup is needed: the first `/task-workflow:task-start` run bootstraps `tasks/` from these templates automatically. To initialize by hand from a checkout of this repo:
+### Direct Claude CLI agent calls
 
-```bash
-mkdir -p tasks/{planning,active,paused,completed}
-cp templates/main.md tasks/main-template.md
-cp templates/global-task-manager.md tasks/global-task-manager.md
-cp templates/CLAUDE.md tasks/CLAUDE.md
-```
+Schemas under `schemas/` support external systems that knowingly recreate the
+canonical handoff and gate semantics. Direct agent invocation is not the
+student/onboarding path; omitting the full Task Workflow Handoff Packet can
+silently weaken intent and Git safety. See the [advanced CLI reference](./cli-reference.md).
 
-### main.md Format
+`scripts/workflow.sh` is intentionally deprecated and exits without invoking an
+agent because the old wrapper did not preserve the canonical handoff or commit
+gates.
 
-```markdown
-# T008: Feature Name
+### Optional Pi extension
 
-## Meta
-- **Status:** PLANNING | PLAN_REVIEW | READY | EXECUTING_PHASE_1 | CODE_REVIEW | COMPLETE | BLOCKED
-- **Created:** 2026-01-28
-- **Last Updated:** 2026-01-28
+`pi-extension/` is an **optional, advanced experiment** for deterministic graph
+orchestration in Pi. It is not installed by the Claude Code marketplace entry,
+not used by `task-start`, and not required for normal users. Its deterministic
+engine tests run in CI; tests that spawn a live LLM remain manual.
 
-## Task
-{Original task description}
-
-## Plan
-{Planner fills this}
-
-## Plan Review
-{Plan Reviewer fills this}
-
-## Execution Log
-{Executor fills this per phase}
-
-## Code Review Log
-{Code Reviewer fills this per phase}
-
-## Completion
-{Final summary}
-```
-
-## Git strategy
-
-The workflow is branch-agnostic. It does not impose `main`, feature branches, or worktrees globally. The parent records a runtime strategy from repository instructions, Git state, concurrency, and delivery expectations while preserving clean baselines and explicit reviewed-path staging.
-
-Push, PR, merge, deployment, force-push, and branch deletion require explicit authorization or an already-authorized repository workflow.
-
-## Structured Output
-
-External CLI orchestration can request structured JSON conforming to schemas in `schemas/`; the canonical interactive task-start flow uses durable Markdown task artifacts. JSON mode enables:
-- **Enforcement** — Agents must confirm checklist completion
-- **Gate clarity** — Orchestrator parses gate decisions directly
-- **Audit trail** — JSON outputs can be logged
-
-Example usage:
-```bash
-claude --agent task-workflow:planner \
-  --output-format json \
-  --json-schema "$(cat schemas/planner-output.json)" \
-  -p "Create plan for: {task}"
-```
-
-## Skills
-
-Canonical orchestration skills:
-
-- `task-start` — Intent Contract, optional hardening, handoff packet, runtime strategy, agent gates, and completion
-- `intent-harden` — optional expansion/compression/stress-test pass before planning
-- `start` — compatibility alias for `task-start`
-- `task-workflow` — shared task ledger and Git-safety contract
-
-The agent role instructions live in the agent definitions themselves (`agents/*.md`); there are no separate per-role skills.
-
-## Self-Improvement
-
-The `logs/observations.jsonl` file tracks workflow observations:
-
-```jsonl
-{"timestamp": "...", "agent": "executor", "observation": "...", "severity": "major"}
-```
-
-Review observations periodically to refine agents and schemas.
-
-## Documentation
-
-- [Architecture](./architecture.md) — Full system design and invocation patterns
-- [Lessons Learned](./lessons-learned.md) — First live test results and gotchas
-
-## Validation
-
-Before release or PR review:
+## Validate a release candidate
 
 ```bash
 python3 scripts/validate-plugin.py
-claude plugin validate .
+claude plugin validate --strict .
+bash -n scripts/*.sh
+python3 -m compileall -q scripts
+scripts/smoke-install.sh          # runtime invocation when Claude is available
+(cd pi-extension && npm ci && npm test)
 ```
+
+Use `scripts/smoke-install.sh --static` in unauthenticated CI. The smoke copies
+release surfaces into a temporary fresh install, validates discovery, bootstraps
+a temporary project, and (when runtime mode is available) invokes
+`task-workflow:task-start` with all tools disabled and no session persistence.
+
+## Documentation
+
+- [Architecture](./architecture.md)
+- [Advanced CLI reference](./cli-reference.md)
+- [Quarantined historical lessons](./lessons-learned.md)
 
 ## License
 
-MIT
+[MIT](../LICENSE)
