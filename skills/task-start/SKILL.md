@@ -30,7 +30,16 @@ Agents (via the `Agent` tool): `task-workflow:planner`, `task-workflow:plan-revi
 
 ## Stage 0 — Context and task ledger
 
-Read the repository `CLAUDE.md`, `tasks/CLAUDE.md`, `tasks/global-task-manager.md`, and relevant specs. Then choose the Git substrate from evidence, not ritual:
+If `tasks/` does not exist yet, bootstrap it first:
+
+```bash
+mkdir -p tasks/{planning,active,paused,completed}
+cp ${CLAUDE_PLUGIN_ROOT}/templates/main.md tasks/main-template.md
+cp ${CLAUDE_PLUGIN_ROOT}/templates/global-task-manager.md tasks/global-task-manager.md
+cp ${CLAUDE_PLUGIN_ROOT}/templates/CLAUDE.md tasks/CLAUDE.md
+```
+
+Then read the repository `CLAUDE.md`, `tasks/CLAUDE.md`, `tasks/global-task-manager.md`, and relevant specs. Then choose the Git substrate from evidence, not ritual:
 
 - **current branch** — the repository explicitly allows direct serial work there;
 - **feature branch** — isolated review or PR delivery is expected;

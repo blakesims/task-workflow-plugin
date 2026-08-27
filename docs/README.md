@@ -66,7 +66,7 @@ The `templates/` directory contains:
 - `global-task-manager.md` — Initialize your task index
 - `main.md` — Template for new task documents
 
-Initialize a project's task files with:
+No manual setup is needed: the first `/task-workflow:task-start` run bootstraps `tasks/` from these templates automatically. To initialize by hand from a checkout of this repo:
 
 ```bash
 mkdir -p tasks/{planning,active,paused,completed}
