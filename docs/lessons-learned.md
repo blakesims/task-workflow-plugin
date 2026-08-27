@@ -1,5 +1,7 @@
 # Lessons Learned — First Live Test
 
+> Historical test log. References to the legacy `Task` delegation tool are superseded by Claude Code's current `Agent` tool and the canonical `/task-workflow:task-start` skill.
+
 **Date:** 2026-01-28  
 **Task:** T005 Audio Buffer Sync (Cap editor)  
 **Result:** SUCCESS — 465 lines of Rust, bug fixed, code compiles

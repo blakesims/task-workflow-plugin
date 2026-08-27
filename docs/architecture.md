@@ -1,611 +1,117 @@
-# Task Workflow Architecture
+# Task Workflow Plugin Architecture
 
-> A multi-agent development workflow where an orchestrator spawns Claude Code subprocesses.
+## Canonical entry point
 
-## Executive Summary
-
-**The Problem:** Complex development tasks need planning, review, execution, and validation. Doing this in a single conversation loses context and lacks checkpoints.
-
-**The Solution:** A structured workflow with specialized agents, file-based handoffs, and clear gates.
-
-**Key Insights:**
-- Claude Code workers are stateless — state lives in files
-- The orchestrator maintains memory and coordinates agents
-- Agents use `skills` field in frontmatter for deterministic skill loading
-- Agents run sequentially (no parallel writes to main.md)
-
----
-
-## The Two Layers
-
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                           ORCHESTRATOR                                  │
-│                                                                         │
-│  • Receives task from human                                            │
-│  • Spawns CC subprocesses for each step                                │
-│  • Reads structured outputs, makes gate decisions                      │
-│  • Updates global-task-manager.md                                      │
-│  • Reports back on blockers/completion                                 │
-└────────────────────────────┬────────────────────────────────────────────┘
-                             │
-                             │ exec pty:true workdir:PROJECT
-                             │ command:"claude --agent X -p 'task'"
-                             ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                     CLAUDE CODE (STATELESS WORKERS)                     │
-│                                                                         │
-│  Each invocation is independent. No memory between calls.              │
-│                                                                         │
-│  Context per invocation:                                               │
-│  • PROJECT/CLAUDE.md (auto-loaded from workdir)                        │
-│  • Skills from agent's `skills` field (deterministic injection)        │
-│  • ~/.claude/agents/X.md (via --agent X flag)                          │
-│  • Files explicitly read during execution                              │
-└─────────────────────────────────────────────────────────────────────────┘
+```text
+/task-workflow:task-start
 ```
 
----
+`/task-workflow:start` is a compatibility alias. The plugin repository is the canonical source for orchestration skills, specialist agents, templates, and workflow documentation.
 
-## Directory Structure
+## Design principles
 
-```
-project/
-├── CLAUDE.md                    # Project conventions (CC reads this)
-└── tasks/
-    ├── CLAUDE.md                # Task-specific conventions/templates
-    ├── global-task-manager.md   # INDEX of all tasks (orchestrator maintains)
-    ├── active/
-    │   └── T008-feature/
-    │       ├── main.md              # THE living task document
-    │       ├── plan-review.md       # Detailed plan review
-    │       └── code-review-phase-1.md
-    ├── planning/                # Tasks being planned
-    ├── paused/                  # On hold
-    ├── completed/               # Done
-    └── archived/                # Old/cancelled
-```
+1. The parent agent is the orchestrator, not the implementation executor.
+2. `DONE_WHEN` and the canonical handoff packet preserve human intent across agent boundaries.
+3. Planning and implementation are independently reviewed.
+4. Review evidence is written to durable task artifacts.
+5. Git substrate is selected from repository context rather than imposed globally.
+6. Unrelated human work is never stashed, reset, deleted, staged, or committed.
+7. Push, PR, merge, deployment, force-push, and branch deletion require authorization.
 
-## Global Task Manager
+## Flow
 
-The `global-task-manager.md` file is the **index of all tasks**. It provides:
-- Quick overview of all task statuses
-- Links to task directories
-- Blocked tasks highlighted for human attention
-- Next available task ID
-
-**Who updates it:** The orchestrator, NOT the CC agents.
-
-After each CC agent run, the orchestrator:
-1. Reads the structured JSON output
-2. Updates the relevant row in global-task-manager.md
-3. Moves rows between sections if status changed (e.g., active → completed)
-
-This keeps CC agents simple and avoids conflicts.
-
----
-
-## The main.md Document
-
-The `main.md` file is the **single source of truth** for a task. All agents update it.
-
-```markdown
-# T008: Feature Name
-
-## Meta
-- **Status:** PLANNING | PLAN_REVIEW | READY | EXECUTING_PHASE_1 | CODE_REVIEW | MERGE_REVIEW | MERGE_READY | COMPLETE | BLOCKED
-- **Created:** 2026-01-28
-- **Last Updated:** 2026-01-28
-- **Blocked Reason:** {if BLOCKED}
-
-## Task
-{Original description from human}
-
----
-
-## Plan
-{Planner fills this}
-
-### Objective
-### Scope
-### Phases
-### Decision Matrix
-
----
-
-## Plan Review
-{Plan Reviewer fills this}
-- **Gate:** READY | NEEDS_WORK | NOT_READY
-- **Open Questions Finalized:** {list}
-→ Details: plan-review.md
-
----
-
-## Execution Log
-{Executor fills this per phase}
-
-### Phase 1: {title}
-- **Status:** COMPLETE | BLOCKED
-- **Commits:** ...
-- **Files Modified:** ...
-
----
-
-## Code Review Log
-{Code Reviewer fills this per phase}
-
-### Phase 1
-- **Gate:** PASS | REVISE | FAIL
-→ Details: code-review-phase-1.md
-
----
-
-## Merge Review
-{Merge Reviewer fills this after all phases complete}
-- **Verdict:** MERGE_READY | NEEDS_WORK | BLOCKED
-→ Details: merge-review.md
-
----
-
-## Completion
-{Final summary when done}
+```text
+Human request
+  ↓
+Context + Git strategy gate
+  ↓
+Intent Contract with DONE_WHEN
+  ↓
+Optional intent-harden
+  ↓
+Canonical Task Workflow Handoff Packet
+  ↓
+ROUTE ── quickfix ──► executor → code-reviewer → COMPLETE
+  ↓ planned
+planner → plan-reviewer
+  ↓ READY
+per phase: executor → code-reviewer
+  ↓
+final holistic review (if >1 phase) → COMPLETE
 ```
 
----
+## Runtime strategy
 
-## The Workflow
+The orchestrator inspects:
 
-```
-Human: "Implement feature X"
-              │
-              ▼
-┌─────────────────────────────────────┐
-│ 1. PLAN                             │
-│    Agent: planner                   │
-│    Updates: main.md Plan section    │
-│    Sets: Status → PLAN_REVIEW       │
-└─────────────────────────────────────┘
-              │
-              ▼
-┌─────────────────────────────────────┐
-│ 2. REVIEW PLAN                      │
-│    Agent: plan-reviewer             │
-│    Updates: main.md Plan Review     │
-│    Creates: plan-review.md          │
-│    Gate: READY / NEEDS_WORK / NOT_READY
-└─────────────────────────────────────┘
-              │
-      ┌───────┴───────┐
-      │               │
-   READY         NEEDS_WORK/NOT_READY
-      │               │
-      │          Back to planner
-      │          or BLOCKED with questions
-      ▼
-┌─────────────────────────────────────┐
-│ 3. EXECUTE PHASE N                  │
-│    Agent: executor                  │
-│    Updates: main.md Execution Log   │
-│    Sets: Status → CODE_REVIEW       │
-└─────────────────────────────────────┘
-              │
-              ▼
-┌─────────────────────────────────────┐
-│ 4. CODE REVIEW                      │
-│    Agent: code-reviewer             │
-│    Updates: main.md Code Review Log │
-│    Creates: code-review-phase-N.md  │
-│    Gate: PASS / REVISE / FAIL       │
-│    (Max 3 REVISE cycles → FAIL)     │
-└─────────────────────────────────────┘
-              │
-      ┌───────┼───────┐
-      │       │       │
-    PASS   REVISE   FAIL
-      │       │       │
-      │       │       └──→ BLOCKED (needs re-planning)
-      │       │
-      │       └──→ Back to executor (max 3 times)
-      ▼
-┌─────────────────────────────────────┐
-│ 5. PHASE REVIEW (conditional)       │
-│    Agent: phase-reviewer            │
-│    Skip if: 0 critical/major issues │
-│    Updates: Plan if learnings apply │
-│    Gate: GO / BLOCK                 │
-└─────────────────────────────────────┘
-              │
-              ▼
-      More phases? ──→ Back to EXECUTE PHASE N+1
-              │
-              └──→ Last phase?
-                       │
-                       ▼
-┌─────────────────────────────────────┐
-│ 6. MERGE REVIEW                     │
-│    Agent: merge-reviewer            │
-│    Verifies: preconditions,         │
-│      integration, forbidden files   │
-│    Creates: merge-review.md         │
-│    Writes: executive summary        │
-│    Verdict: MERGE_READY /           │
-│      NEEDS_WORK / BLOCKED           │
-└─────────────────────────────────────┘
-              │
-      ┌───────┼───────┐
-      │       │       │
-  MERGE    NEEDS    BLOCKED
-  READY    WORK       │
-      │       │       └──→ BLOCKED (preconditions not met)
-      │       │
-      │       └──→ Back to executor
-      ▼
-  HUMAN APPROVAL ──→ COMPLETE
+- project instructions;
+- current branch and working-tree state;
+- remotes and delivery expectations;
+- existing worktrees and concurrent work;
+- task scope and risk.
+
+It then records one strategy in `main.md`:
+
+- **current branch** — direct serial work is explicitly appropriate;
+- **feature branch** — isolated review or PR delivery is expected;
+- **worktree** — a shared/dirty checkout or concurrent lane must be preserved.
+
+The workflow is otherwise identical across substrates.
+
+## Canonical artifacts
+
+```text
+tasks/
+├── global-task-manager.md
+├── planning/
+├── active/
+│   └── TXXX-task/
+│       ├── main.md
+│       ├── plan-review.md
+│       └── code-review-phase-N.md
+├── paused/
+└── completed/
 ```
 
----
+`main.md` contains:
 
-## Agent Responsibilities
+- task metadata and runtime strategy;
+- Intent Contract and `DONE_WHEN`;
+- optional intent-hardening result;
+- approved phased plan;
+- plan-review summary;
+- per-phase baseline and execution evidence;
+- code-review summaries;
+- completion evidence.
 
-| Agent | Skills Loaded | Purpose |
-|-------|---------------|---------|
-| **planner** | plan, task-workflow | Creates implementation plans |
-| **plan-reviewer** | review-plan, task-workflow | Validates plans, finds gaps |
-| **executor** | execute, task-workflow | Implements phases |
-| **code-reviewer** | review-code, task-workflow | Reviews implementations |
-| **phase-reviewer** | review-phase, task-workflow | Bridges phases, applies learnings |
-| **merge-reviewer** | review-merge, task-workflow | Final merge gatekeeper, executive summary |
+## Agents
 
-### What Each Agent Outputs
+| Agent | Responsibility | Gate |
+|---|---|---|
+| `task-workflow:planner` | Produce a phased plan from the handoff packet | submits for review |
+| `task-workflow:plan-reviewer` | Verify alignment, executability, and validation | `READY` / `NEEDS_WORK` / `NOT_READY` |
+| `task-workflow:executor` | Implement one approved phase without committing | `COMPLETE` / `BLOCKED` |
+| `task-workflow:code-reviewer` | Inspect Git reality, tests, ACs, and `DONE_WHEN` | `PASS` / `REVISE` / `FAIL` |
 
-| Agent | Updates main.md | Creates | Sets Status |
-|-------|-----------------|---------|-------------|
-| **planner** | Plan section | — | PLAN_REVIEW |
-| **plan-reviewer** | Plan Review section | plan-review.md | READY / PLANNING / BLOCKED |
-| **executor** | Execution Log | — | CODE_REVIEW / BLOCKED |
-| **code-reviewer** | Code Review Log | code-review-phase-N.md | EXECUTING_PHASE_N+1 / COMPLETE / BLOCKED |
-| **phase-reviewer** | Plan (if learnings) | — | (unchanged) / BLOCKED |
-| **merge-reviewer** | Merge Review section | merge-review.md | MERGE_READY / EXECUTING_PHASE_N / BLOCKED |
+The parent owns task routing, explicit-path staging, commits after `PASS`, GTM updates, and completion.
 
----
+## Git review boundary
 
-## Iteration Limits
+Before each phase:
 
-To prevent infinite loops:
+1. Require a clean selected workspace.
+2. Record `git rev-parse HEAD` as the phase baseline.
+3. Let the executor leave source changes uncommitted.
+4. Have the reviewer inspect the diff from that baseline and write its artifact.
+5. On `PASS`, stage only reviewed paths with `git add -- <path...>`.
+6. Verify `git diff --cached --name-only` before committing.
 
-| Situation | Limit | Action |
-|-----------|-------|--------|
-| REVISE cycles (code review) | 3 | After 3 REVISE → FAIL → BLOCKED |
-| NEEDS_WORK cycles (plan review) | 3 | After 3 NEEDS_WORK → escalate to human |
+Never use `git add .` or `git add -A` in the workflow.
 
-The orchestrator tracks iteration counts and enforces limits.
+## Optional intent hardening
 
----
+`/task-workflow:intent-harden` expands, compresses, and stress-tests the Intent Contract before planning. Visualization is optional and used only when it materially reduces ambiguity or project instructions require it.
 
-## BLOCKED Recovery Procedure
+## Project specialization
 
-When a task is BLOCKED:
-
-1. **Human reviews** the blocker (open questions, failed gate, etc.)
-2. **Human answers** questions or provides guidance in main.md
-3. **Human updates Status** to the appropriate previous state:
-   - If blocked during PLAN_REVIEW → set to `PLANNING` or `PLAN_REVIEW`
-   - If blocked during CODE_REVIEW → set to `EXECUTING_PHASE_N`
-   - If blocked during execution → set to `EXECUTING_PHASE_N`
-4. **Human tells orchestrator** to continue: "Continue T008"
-5. **Orchestrator resumes** from the new status
-
----
-
-## Phase Reviewer Skip Conditions
-
-The phase-reviewer step is **conditional**. Skip it when:
-- Previous phase had **0 critical issues** AND **0 major issues**
-- No significant learnings to propagate
-
-Run it when:
-- Previous phase had issues that might affect future phases
-- Patterns were discovered that should update the plan
-- The executor made deviations that need documentation
-
----
-
-## Status State Machine
-
-```
-PLANNING ─────────────────────────────────────────────┐
-    │                                                  │
-    ▼                                                  │
-PLAN_REVIEW                                            │
-    │                                                  │
-    ├──[NEEDS_WORK]───────────────────────────────────┘
-    │
-    ├──[NOT_READY + questions]──→ BLOCKED
-    │
-    └──[READY]──→ READY
-                    │
-                    ▼
-              EXECUTING_PHASE_1
-                    │
-                    ▼
-                CODE_REVIEW
-                    │
-    ┌───────────────┼───────────────┐
-    │               │               │
-  [PASS]        [REVISE]        [FAIL]
-    │           (max 3)             │
-    │               │               │
-    │               └──→ EXECUTING_PHASE_N (retry)
-    │                               │
-    │                               └──→ BLOCKED
-    ▼
-More phases? ──→ EXECUTING_PHASE_N+1 ──→ CODE_REVIEW ──→ ...
-    │
-    └──→ MERGE_REVIEW ──→ MERGE_READY ──→ (human approves) ──→ COMPLETE
-                │
-                ├──[NEEDS_WORK]──→ EXECUTING_PHASE_N (back to executor)
-                └──[BLOCKED]──→ BLOCKED
-```
-
----
-
-## Orchestrator Logic
-
-To decide what to do, read the **Status** field in main.md:
-
-| Status | Action |
-|--------|--------|
-| `PLANNING` | Spawn planner agent |
-| `PLAN_REVIEW` | Spawn plan-reviewer agent |
-| `READY` | Spawn executor for Phase 1 |
-| `EXECUTING_PHASE_N` | Check if executor running; if not, spawn for Phase N |
-| `CODE_REVIEW` | Spawn code-reviewer agent |
-| `BLOCKED` | Report to human with open questions/blocker |
-| `MERGE_REVIEW` | Spawn merge-reviewer agent |
-| `MERGE_READY` | Report to human for merge approval |
-| `COMPLETE` | Move to completed, update global-task-manager, report success |
-
----
-
-## Directory Transitions
-
-The **orchestrator** (not agents) moves task directories at lifecycle gates:
-
-| Transition | Trigger | Action |
-|------------|---------|--------|
-| planning → active | Plan review gate: `READY` | `git mv tasks/planning/TXXX-name tasks/active/` |
-| active → completed | Final phase code review: `PASS` | `git mv tasks/active/TXXX-name tasks/completed/` |
-
-**Why the orchestrator?** Agents are stateless and focused on their specific job (planning, reviewing, executing). Directory moves are lifecycle operations that span the whole workflow — the orchestrator owns this.
-
-**When to move**:
-1. **planning → active**: Immediately after plan-reviewer returns `READY` gate, before spawning executor
-2. **active → completed**: After final code-reviewer returns `PASS`, as part of completion wrap-up
-
-**Global task manager updates**:
-- Update `global-task-manager.md` link paths after directory moves
-- Move row to "Recently Completed" section when task completes
-- Commit these changes: `git add tasks/ && git commit -m "chore: complete TXXX"`
-
----
-
-## Invocation Patterns
-
-Skills are loaded via agent frontmatter `skills` field — no need for `--append-system-prompt`.
-
-### Required Flags
-
-| Flag | Why |
-|------|-----|
-| `--plugin-dir PATH` | Load plugin agents/skills (not auto-discovered from `~/.claude/plugins/`) |
-| `--allowedTools "Edit Read Write"` | `-p` mode skips workspace trust dialog; file ops need explicit permission |
-| `--agent task-workflow:NAME` | Plugin agents are namespaced `task-workflow:*` |
-
-### Base Command Template
-```bash
-claude \
-  --plugin-dir ~/.claude/plugins/task-workflow \
-  --allowedTools "Edit Read Write" \
-  --agent task-workflow:{AGENT} \
-  -p '{PROMPT}'
-```
-
-### Spawn Planner
-```bash
-exec pty:true workdir:PROJECT background:true \
-  command:"claude --plugin-dir ~/.claude/plugins/task-workflow --allowedTools 'Edit Read Write' --agent task-workflow:planner -p 'Create plan for: {task}. Output to tasks/active/T008-feature/main.md'"
-```
-
-### Spawn Plan Reviewer
-```bash
-exec pty:true workdir:PROJECT background:true \
-  command:"claude --plugin-dir ~/.claude/plugins/task-workflow --allowedTools 'Edit Read Write' --agent task-workflow:plan-reviewer -p 'Review tasks/active/T008-feature/main.md'"
-```
-
-### Spawn Executor
-```bash
-exec pty:true workdir:PROJECT background:true \
-  command:"claude --plugin-dir ~/.claude/plugins/task-workflow --allowedTools 'Edit Read Write' --agent task-workflow:executor -p 'Execute Phase 2 from tasks/active/T008-feature/main.md'"
-```
-
-### Spawn Code Reviewer
-```bash
-exec pty:true workdir:PROJECT background:true \
-  command:"claude --plugin-dir ~/.claude/plugins/task-workflow --allowedTools 'Edit Read Write' --agent task-workflow:code-reviewer -p 'Review Phase 2 execution in tasks/active/T008-feature/main.md'"
-```
-
-### Spawn Merge Reviewer
-```bash
-exec pty:true workdir:PROJECT background:true \
-  command:"claude --plugin-dir ~/.claude/plugins/task-workflow --allowedTools 'Edit Read Write' --agent task-workflow:merge-reviewer -p 'Run merge review for tasks/active/T008-feature/main.md'"
-```
-
-### With Structured Output
-For machine-parseable gate decisions:
-```bash
-claude \
-  --plugin-dir ~/.claude/plugins/task-workflow \
-  --allowedTools "Edit Read Write" \
-  --agent task-workflow:plan-reviewer \
-  --output-format json \
-  --json-schema "$(cat schemas/plan-reviewer-output.json)" \
-  -p 'Review tasks/active/T008-feature/main.md'
-```
-
-### Permission Notes
-
-- **`-p` mode** skips the interactive workspace trust dialog
-- Without `--allowedTools`, agents can read/analyze but **cannot write files**
-- Add Bash commands to allowlist if agents need them: `--allowedTools "Edit Read Write Bash(git:*) Bash(cargo:*)"`
-- For fully trusted environments: `--dangerously-skip-permissions` (sandboxed only)
-
----
-
-## Agent File Format
-
-Agents require YAML frontmatter with `name` and `description`:
-
-```yaml
----
-name: planner
-description: Creates implementation plans for tasks
-skills:
-  - plan
-  - task-workflow
----
-
-# Agent prompt content here...
-```
-
-### Required Fields
-
-| Field | Description |
-|-------|-------------|
-| `name` | Unique identifier (lowercase, hyphens) |
-| `description` | When to use this agent |
-
-### Optional Fields
-
-| Field | Description |
-|-------|-------------|
-| `skills` | Skills to inject at startup (deterministic loading) |
-
-See [Claude Code subagents documentation](https://code.claude.com/docs/sub-agents) for additional optional fields like `tools`, `model`, and `permissionMode`.
-
----
-
-## Quick Reference
-
-### Start a Task
-1. Create `tasks/active/T00N-name/main.md` with Task section
-2. Set Status: `PLANNING`
-3. Tell orchestrator: "Start T00N"
-
-### Check Progress
-1. Read `tasks/active/T00N-name/main.md`
-2. Check Status field
-3. Check relevant logs
-
-### Resume After Blocker
-1. Answer open questions in main.md
-2. Update Status to appropriate step (see BLOCKED Recovery)
-3. Tell orchestrator: "Continue T00N"
-
----
-
-## Self-Improvement
-
-When agents discover improvements to the workflow, they should update the **source files**, not the cached copies.
-
-### Skill Source Locations
-
-Each skill has `source_repo` and `source_path` in its frontmatter:
-
-```yaml
----
-name: orchestrate
-source_repo: ~/repos/task-workflow-plugin
-source_path: skills/orchestrate/SKILL.md
----
-```
-
-**When improving a skill:**
-1. Edit the source file at `{source_repo}/{source_path}`
-2. Do NOT edit `~/.claude/skills/` — that's a cached copy
-3. The cache is overwritten on plugin reload
-
-### Plugin Cache Behavior
-
-Claude Code copies plugins to a cache directory. This means:
-- Edits to `~/.claude/skills/` or `~/.claude/agents/` affect the cached copy only
-- The source repo (`~/repos/task-workflow-plugin/`) is the canonical version
-- Use `--plugin-dir ~/repos/task-workflow-plugin` during development
-
-### Observations Log
-
-Track workflow observations in `logs/observations.jsonl`:
-
-```jsonl
-{"timestamp": "2026-01-31T...", "agent": "executor", "observation": "...", "severity": "major"}
-```
-
-Review periodically to refine agents and schemas.
-
----
-
-## Design Principles
-
-1. **Single source of truth:** main.md is authoritative
-2. **Stateless workers:** CC invocations are independent
-3. **File-based handoffs:** State lives in files, not memory
-4. **Clear gates:** Each step has pass/fail criteria
-5. **Iteration limits:** Prevent infinite loops (3 REVISE max)
-6. **Human in the loop:** Blockers surface to human
-7. **Sequential execution:** One agent at a time (no conflicts)
-8. **Audit trail:** Supporting docs preserve details
-
-
-## Mermaid diagrams
-
-
-```mermaid
-flowchart TD
-    H["Human task"] --> O["Orchestrator"]
-    O --> P["Planner agent"]
-    P --> R["Plan review agent"]
-    R -->|READY| E["Executor agent"]
-    E --> C["Code review agent"]
-    C -->|PASS| Done["Complete"]
-    R -->|NEEDS_WORK| P
-    C -->|REVISE| E
-    R -->|NOT_READY| B["BLOCKED"]
-    C -->|FAIL| B
-    B --> O
-```
-
-```mermaid
-flowchart TD
-    H["Human provides task"] --> O["Orchestrator (coordinates + decides gates)"]
-
-    O --> GTM["Update index: global-task-manager.md"]
-    O --> S["Read Status in main.md"]
-
-    S -->|PLANNING| P["planner agent\nwrites Plan into main.md"]
-    P -->|sets Status = PLAN_REVIEW| PR["plan-reviewer agent\nwrites Plan Review + plan-review.md"]
-
-    PR -->|READY| X1["executor agent\nexecutes Phase N\nupdates Execution Log in main.md"]
-    X1 -->|sets Status = CODE_REVIEW| CR["code-reviewer agent\nwrites Code Review Log + code-review-phase-N.md"]
-
-    PR -->|NEEDS_WORK| P
-    CR -->|REVISE (<=3)| X1
-    CR -->|PASS| Next{"More phases?"}
-    Next -->|Yes| X1
-    Next -->|No| MR["merge-reviewer agent\nverifies preconditions, integration, executive summary"]
-    MR -->|MERGE_READY| Done["MERGE_READY\n(human approves merge)"]
-    MR -->|NEEDS_WORK| X1
-    MR -->|BLOCKED| Block
-
-    PR -->|NOT_READY + questions| Block["BLOCKED\n(orchestrator reports open questions)"]
-    CR -->|FAIL| Block
-
-```
+Projects may add stricter requirements—mockups, ADRs, sign-off, PR review, deployment gates—but should express those in repository instructions or a thin project profile. The plugin remains the canonical workflow engine.

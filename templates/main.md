@@ -5,54 +5,98 @@
 - **Created:** {date}
 - **Last Updated:** {date}
 - **Blocked Reason:** —
+- **Runtime Strategy:** current branch | feature branch | worktree
+- **Working Branch / Path:** —
+- **Strategy Rationale:** —
+- **Delivery Expectation:** local only | push | PR | merge | deploy | other
+- **Baseline SHA:** —
+- **Lane:** quickfix | planned
+- **Intent hardening:** not offered | run | declined | skipped
 
 ## Task
 
 {Original task description from human}
+
+## Intent Contract
+
+### DONE_WHEN
+
+{One or two lines defining the completed outcome}
+
+### Executive intent
+
+{Problem, why it matters, and user-visible success}
+
+### Scope
+
+- **In:** {included work}
+- **Out:** {excluded work and unchanged behaviour}
+
+### Proposed approach
+
+{High-level method only; no implementation detail}
+
+### Source of intent / evidence
+
+- {Human request, PRD section, repository file, or other source}
+
+### Decisions already made
+
+- {Decision}: {choice} — {rationale}
+
+### Open decisions
+
+- None, or only material human-level choices.
+
+### Assumptions, risks, and validation
+
+- **Assumptions:** —
+- **Risks:** —
+- **Validation expectations:** —
 
 ---
 
 ## Plan
 
 ### Objective
-{1-2 sentence outcome from user's perspective}
+
+{Outcome from the user's perspective, tied to DONE_WHEN}
 
 ### Scope
-- **In:** {what's included}
-- **Out:** {what's excluded}
+
+- **In:** —
+- **Out:** —
 
 ### Phases
 
 #### Phase 1: {title}
-- **Objective:** {what this achieves}
+
+- **Objective:** —
 - **Tasks:**
-  - [ ] Task 1.1: {description}
-  - [ ] Task 1.2: {description}
+  - [ ] —
 - **Acceptance Criteria:**
-  - [ ] AC1: {verifiable outcome}
-- **Files:** `path/to/file` — {what changes}
-- **Dependencies:** {what must be true first}
+  - [ ] AC1: —
+- **Likely Files:** —
+- **Validation:** —
+- **Dependencies:** —
 
-### Decision Matrix
+### Open Questions
 
-#### Open Questions (Need Human Input)
-| # | Question | Options | Impact | Resolution |
-|---|----------|---------|--------|------------|
-| 1 | {question} | A) ... B) ... | {impact} | OPEN |
+- None.
 
-#### Decisions Made (Autonomous)
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| {decision} | {choice} | {why} |
+### Planner Notes
+
+- **Risks:** —
+- **Assumptions:** —
 
 ---
 
 ## Plan Review
+
 - **Gate:** —
 - **Reviewed:** —
 - **Summary:** —
 - **Issues:** —
-- **Open Questions Finalized:** —
 
 → Details: `plan-review.md`
 
@@ -61,11 +105,14 @@
 ## Execution Log
 
 ### Phase 1: {title}
+
 - **Status:** —
+- **Baseline SHA:** —
 - **Started:** —
 - **Completed:** —
-- **Commits:** —
+- **Commit:** —
 - **Files Modified:** —
+- **Validation:** —
 - **Notes:** —
 - **Blockers:** —
 
@@ -74,6 +121,7 @@
 ## Code Review Log
 
 ### Phase 1
+
 - **Gate:** —
 - **Reviewed:** —
 - **Issues:** —
@@ -83,25 +131,13 @@
 
 ---
 
-## Merge Review
-- **Verdict:** —
-- **Reviewed:** —
-- **Branch:** —
-- **Commits:** —
-- **Tests:** —
-- **Summary:** —
-
-### Executive Summary
-—
-
-### Post-Merge Steps
-—
-
--> Details: `merge-review.md`
-
----
-
 ## Completion
+
 - **Completed:** —
+- **DONE_WHEN evidence:** —
+- **Commits:** —
+- **Tests / checks:** —
+- **Review gates:** —
 - **Summary:** —
-- **Learnings:** —
+- **Limitations / follow-ups:** —
+- **How to verify / understand:** —

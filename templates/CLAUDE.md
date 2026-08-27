@@ -1,78 +1,33 @@
 ---
-description: Task documentation procedures for AI agents (task-workflow plugin aligned).
+description: Project task documentation for the task-workflow plugin.
 ---
 
-## AI Task Documentation Procedures
+# Task Workflow (project)
 
-### Core Task Creation Process
+`tasks/` is the durable record of human intention, agent planning, execution, and review for this project. Run it with `/task-workflow:task-start`.
 
-Definitions:
-- **Task** = work item tracked in `tasks/global-task-manager.md`
-- **Phase** = execution unit inside a Task (filled by planner, executed sequentially)
+The full contract — status machine, gates, artifact ownership, Git-safety rules — ships with the plugin (`task-workflow` and `task-start` skills). This file only records what is specific to this project. Project rules may add gates (mockups, sign-off, PR, merge, deployment) but must not weaken the canonical Intent Contract, `DONE_WHEN`, review evidence, or Git-safety rules.
 
-For new tasks:
-1. Get next Task ID from `tasks/global-task-manager.md`
-2. Create folder: `tasks/planning/TXXX-task-slug/`
-3. Copy template: `tasks/main-template.md` → `tasks/planning/TXXX-task-slug/main.md`
-4. Update GTM: add a row linking to the task and increment Next ID
-5. Fill out the `## Task` section with the objective
-6. Set Status to `PLANNING` — the workflow begins
+## Layout
 
-### Status Values (Orchestrator State Machine)
+```text
+tasks/
+├── CLAUDE.md                # this file
+├── global-task-manager.md   # task index and Next ID
+├── main-template.md         # template for new task main.md files
+├── planning/                # PLANNING / PLAN_REVIEW
+├── active/                  # READY / EXECUTING_PHASE_N / CODE_REVIEW
+│   └── TXXX-task-slug/
+│       ├── main.md
+│       ├── plan-review.md
+│       └── code-review-phase-N.md
+├── paused/                  # BLOCKED
+└── completed/               # COMPLETE
+```
 
-| Status | Meaning | Directory |
-|--------|---------|-----------|
-| `PLANNING` | Planner agent creating implementation plan | `tasks/planning/` |
-| `PLAN_REVIEW` | Plan-reviewer validating the plan | `tasks/planning/` |
-| `READY` | Plan approved, ready for execution | `tasks/active/` |
-| `EXECUTING_PHASE_N` | Executor working on phase N | `tasks/active/` |
-| `CODE_REVIEW` | Code-reviewer checking phase implementation | `tasks/active/` |
-| `BLOCKED` | Needs human input (questions/failed gate) | `tasks/paused/` |
-| `COMPLETE` | All phases done and reviewed | `tasks/completed/` |
+## Project-specific rules
 
-### Directory Transitions
-
-The **orchestrator** moves task folders at lifecycle gates:
-
-| Gate | Action |
-|------|--------|
-| Plan approved (`READY`) | `git mv tasks/planning/TXXX tasks/active/` |
-| Task blocked | `git mv tasks/active/TXXX tasks/paused/` |
-| Task complete (final `PASS`) | `git mv tasks/active/TXXX tasks/completed/` |
-
-When status changes, update the GTM row link to reflect the new path.
-
-### main.md Sections
-
-Each section is owned by a specific agent:
-
-| Section | Owner | When Updated |
-|---------|-------|--------------|
-| `## Meta` | All agents | Status changes |
-| `## Task` | Human/Orchestrator | Task creation |
-| `## Plan` | Planner | Planning phase |
-| `## Plan Review` | Plan-reviewer | After planning |
-| `## Execution Log` | Executor | During execution |
-| `## Code Review Log` | Code-reviewer | After each phase |
-| `## Completion` | Orchestrator | Task complete |
-
-### Supporting Documents
-
-Created alongside main.md when needed:
-- `plan-review.md` — Detailed plan review findings
-- `code-review-phase-N.md` — Detailed code review per phase
-
-### Iteration Limits
-
-| Situation | Limit | Action |
-|-----------|-------|--------|
-| REVISE cycles (code review) | 3 | After 3 REVISE → FAIL → BLOCKED |
-| NEEDS_WORK cycles (plan review) | 3 | After 3 NEEDS_WORK → escalate to human |
-
-### BLOCKED Recovery
-
-1. Human reviews the blocker in main.md
-2. Human answers open questions or provides guidance
-3. Human updates Status to appropriate previous state
-4. Human tells orchestrator: "Continue TXXX"
-5. Orchestrator resumes from the new status
+- **Git strategy:** {e.g. "feature branches off main; never commit to main directly" — or "current branch is fine for solo work"}
+- **Validation:** {the test/lint/build commands a phase must pass}
+- **Delivery:** {local only | push | PR | merge | deploy — and who authorizes it}
+- **Extra gates:** {mockup approval, human sign-off, none}

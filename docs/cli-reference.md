@@ -47,14 +47,16 @@ claude --agent task-workflow:planner \
 
 ### 2. Claude Code as Orchestrator
 
-Use the Task tool with `subagent_type`:
+Use the current `Agent` tool with a namespaced `subagent_type`:
 
 ```
-Task(
+Agent(
   subagent_type="task-workflow:planner",
   prompt="Create plan for T007..."
 )
 ```
+
+The canonical `/task-workflow:task-start` skill creates these calls and routes their gates automatically.
 
 **Pros:**
 - Native integration, no PTY issues
@@ -75,7 +77,6 @@ Plugin agents are namespaced. Always use the full name:
 | plan-reviewer | `task-workflow:plan-reviewer` |
 | executor | `task-workflow:executor` |
 | code-reviewer | `task-workflow:code-reviewer` |
-| phase-reviewer | `task-workflow:phase-reviewer` |
 
 ## workflow.sh Script
 
@@ -90,7 +91,6 @@ workflow.sh planner T007 "" "Create an auth system with JWT"
 workflow.sh plan-reviewer T007
 workflow.sh executor T007 1
 workflow.sh code-reviewer T007 1
-workflow.sh phase-reviewer T007 2
 ```
 
 Features:
@@ -119,14 +119,14 @@ Environment variables:
 ### Recommended Tool Permissions
 
 ```bash
-# Read-only agents (planner, plan-reviewer, code-reviewer)
---allowedTools "Read,Glob,Grep,Bash(git *)"
+# Planner and reviewers write durable task/review artifacts and run validation
+--allowedTools "Read,Write,Edit,Glob,Grep,Bash"
 
 # Executor (needs write access)
 --allowedTools "Read,Write,Edit,Glob,Grep,Bash"
 
 # Phase-reviewer (can update plan)
---allowedTools "Read,Edit,Glob,Grep,Bash(git *)"
+--allowedTools "Read,Write,Edit,Glob,Grep,Bash"
 ```
 
 ### Full Command Template

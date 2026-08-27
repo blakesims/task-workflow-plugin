@@ -38,7 +38,7 @@
     },
     "status_set_to": {
       "type": "string",
-      "description": "Status set in main.md (EXECUTING_PHASE_N+1, MERGE_REVIEW, EXECUTING_PHASE_N for REVISE, or BLOCKED)"
+      "description": "Status set in main.md (parent-routed next phase/final review after PASS, EXECUTING_PHASE_N for REVISE, or BLOCKED)"
     },
     "issues": {
       "type": "object",

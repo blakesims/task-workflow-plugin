@@ -1,190 +1,73 @@
 ---
 name: task-workflow
-description: >
-  Understand the multi-agent task workflow structure. Reference this when working
-  on tasks in a tasks/ directory. Defines main.md format and agent responsibilities.
-source_repo: ~/repos/task-workflow-plugin
+description: Shared task ledger, gate, artifact, and Git-safety contract for the canonical task-start workflow.
+source_repo: https://github.com/blakesims/task-workflow-plugin
 source_path: skills/task-workflow/SKILL.md
 disable-model-invocation: true
 ---
 
 # Task Workflow
 
-## Editing This Skill
+`tasks/` is the durable record of human intention, agent planning, execution, and review. The entry point is `/task-workflow:task-start`; this file is the shared contract it and every child agent operate under.
 
-**Canonical source**: `~/repos/task-workflow-plugin/skills/task-workflow/SKILL.md`
+## Task creation
 
-If improving this skill, edit the source file above, NOT `~/.claude/skills/`.
-The cache copy is overwritten on plugin reload.
+1. Read `CLAUDE.md`, this file, and `tasks/global-task-manager.md`.
+2. Get `Next ID` from the GTM, create `tasks/planning/TXXX-task-slug/`, copy `tasks/main-template.md` to `main.md`, add the task to the GTM, and increment `Next ID`.
+3. Draft the Intent Contract and `DONE_WHEN` from the human's request; set status `PLANNING`.
+4. Offer `/task-workflow:intent-harden` for non-trivial work and record the outcome on the `Intent hardening:` line in `main.md`. If it runs, the hardened brief replaces the draft contract.
+5. Build the Handoff Packet (defined in `task-start`). Every child prompt receives the same `DONE_WHEN` verbatim.
+6. Route the task: `quickfix` (small, one plausible site, obvious validation, no product ambiguity — planning skipped, code review kept) or `planned`. Record the lane in `main.md`.
 
-## Directory Structure
+## Status machine
 
-```
-tasks/
-├── global-task-manager.md   # INDEX of all tasks
-├── active/          # Currently being worked on
-│   └── T008-feature/
-│       ├── main.md              # THE living task document
-│       ├── plan-review.md       # Detailed plan review
-│       └── code-review-phase-1.md
-├── planning/        # Tasks being planned
-├── paused/          # On hold
-├── completed/       # Done
-└── archived/        # Old/cancelled
-```
+| Status | Meaning | Directory |
+|---|---|---|
+| `PLANNING` | Intent/plan being prepared | `tasks/planning/` |
+| `PLAN_REVIEW` | Plan reviewer checking readiness | `tasks/planning/` |
+| `READY` | Plan passed; task can execute | `tasks/active/` |
+| `EXECUTING_PHASE_N` | Executor implementing phase N | `tasks/active/` |
+| `CODE_REVIEW` | Code reviewer checking phase N | `tasks/active/` |
+| `BLOCKED` | Human input or prerequisite required | `tasks/paused/` |
+| `COMPLETE` | All phases implemented and reviewed | `tasks/completed/` |
 
-## main.md Structure
+A quickfix enters `tasks/active/` at routing and runs as a single phase. The parent moves folders with a normal filesystem move, keeps the `## Meta` status and GTM row in agreement, and stages the old/new paths at the next approved commit boundary. Tasks created before this workflow are historical evidence: reassess their intent against current repository direction before resuming; never execute stale plans automatically.
 
-The `main.md` file is the **single source of truth** for a task. All agents update it.
+## Ownership and gates
 
-```markdown
-# T{NNN}: {Task Title}
+| Artifact | Owner |
+|---|---|
+| Intent Contract and Handoff Packet | Human + parent orchestrator |
+| `## Plan` | `task-workflow:planner` |
+| `## Plan Review` / `plan-review.md` | `task-workflow:plan-reviewer` |
+| Source edits and `## Execution Log` | `task-workflow:executor` |
+| `## Code Review Log` / `code-review-phase-N.md` | `task-workflow:code-reviewer` |
+| Git commits after `PASS`, GTM, transitions | Parent orchestrator |
 
-## Meta
-- **Status:** PLANNING | PLAN_REVIEW | READY | EXECUTING_PHASE_{N} | CODE_REVIEW | MERGE_REVIEW | MERGE_READY | COMPLETE | BLOCKED
-- **Created:** {date}
-- **Last Updated:** {date}
-- **Blocked Reason:** {if BLOCKED, why}
+| Gate | Outcome | Action |
+|---|---|---|
+| Plan review | `READY` | Promote to `tasks/active/` and execute |
+| Plan review | `NEEDS_WORK` | Planner revises, re-review |
+| Plan review | `NOT_READY` | Block for a real human decision/prerequisite |
+| Code review | `PASS` | Parent commits the reviewed phase and continues |
+| Code review | `REVISE` | Executor repairs numbered findings, re-review |
+| Code review | `FAIL` | Block or re-plan |
 
-## Task
-{Original task description from human}
+Maximum three `NEEDS_WORK` or `REVISE` cycles before blocking. If a reviewer returns a verdict without persisting its declared artifacts, the parent writes the exact output before routing the gate.
 
----
+## Git and substrate discipline
 
-## Plan
+- Choose current branch, feature branch, or worktree from repository instructions, Git state, concurrency, and delivery expectations; record the strategy, rationale, and task baseline SHA in `main.md`.
+- Preserve unrelated human changes: never stash, reset, delete, or commit them; prefer safe isolation when allowed.
+- The executor starts only from a clean workspace and leaves its phase uncommitted for review.
+- The code reviewer inspects the actual working-tree diff from the recorded phase baseline, runs checks, and persists its verdict; the plan reviewer does the same for plans.
+- The parent commits only after `PASS`, using `git add -- <explicit-reviewed-paths>` and a task/phase-specific message. Never use `git add .`, `git add -A`, or stage a path the reviewer did not inspect; verify `git diff --cached --name-only` before every commit.
+- Push, PR, merge, deployment, force-push, and branch deletion require explicit authorization or an already-authorized repository workflow.
 
-### Objective
-{1-2 sentence outcome from user's perspective}
+## Blocked recovery
 
-### Scope
-- **In:** {included}
-- **Out:** {excluded}
-
-### Phases
-
-#### Phase 1: {title}
-- **Objective:** {what this achieves}
-- **Tasks:**
-  - [ ] Task 1.1: {description}
-  - [ ] Task 1.2: {description}
-- **Acceptance Criteria:**
-  - [ ] AC1: {verifiable outcome}
-- **Files:** {files to modify}
-- **Dependencies:** {what must be true before starting}
-
-#### Phase 2: {title}
-{same structure}
-
-### Decision Matrix
-
-#### Open Questions (Need Human Input)
-| # | Question | Options | Impact | Resolution |
-|---|----------|---------|--------|------------|
-| 1 | {question} | A) ... B) ... | {impact} | OPEN / {answer} |
-
-#### Decisions Made (Autonomous)
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| {decision} | {choice} | {why} |
-
----
-
-## Plan Review
-- **Gate:** READY | NEEDS_WORK | NOT_READY
-- **Reviewed:** {date}
-- **Summary:** {1-2 sentence assessment}
-- **Issues:** {count} critical, {count} major, {count} minor
-- **Open Questions Finalized:** {list questions needing human input}
-
-→ Details: `plan-review.md`
-
----
-
-## Execution Log
-
-### Phase 1: {title}
-- **Status:** EXECUTING_PHASE_N | COMPLETE | BLOCKED
-- **Started:** {date}
-- **Completed:** {date}
-- **Commits:** `abc123`, `def456`
-- **Files Modified:**
-  - `path/file.ts` — {what changed}
-- **Notes:** {executor observations}
-- **Blockers:** {if any}
-
-### Phase 2: {title}
-{same structure}
-
----
-
-## Code Review Log
-
-### Phase 1
-- **Gate:** PASS | REVISE | FAIL
-- **Reviewed:** {date}
-- **Issues:** {count} critical, {count} major, {count} minor
-- **Summary:** {brief assessment}
-
-→ Details: `code-review-phase-1.md`
-
-### Phase 2
-{same structure}
-
----
-
-## Merge Review
-- **Verdict:** MERGE_READY | NEEDS_WORK | BLOCKED
-- **Reviewed:** {date}
-- **Branch:** {branch-name}
-- **Summary:** {assessment}
-
-### Executive Summary
-{CEO-readable summary}
-
--> Details: `merge-review.md`
-
----
+Record the exact blocker and attempted work in `main.md`, set `BLOCKED`, move the task to `tasks/paused/`, and update the GTM. When the human answers, restore the appropriate prior stage — an answer does not imply "resume coding"; return to planning if intent or scope changed.
 
 ## Completion
-- **Completed:** {date}
-- **Summary:** {what was delivered}
-- **Learnings:** {for future tasks}
-```
 
-## Agent Responsibilities
-
-| Agent | Reads | Updates in main.md | Creates |
-|-------|-------|-------------------|---------|
-| Planner | Task section | Plan section, Status→PLAN_REVIEW | — |
-| Plan Reviewer | Plan section | Plan Review section, Status | plan-review.md |
-| Executor | Plan (current phase) | Execution Log section, Status | — |
-| Code Reviewer | Execution Log, git diff | Code Review Log section, Status | code-review-phase-N.md |
-| Phase Reviewer | Code Review Log, next phase | May update Plan with learnings | — |
-| Merge Reviewer | All sections | Merge Review section, Status | merge-review.md |
-
-## Status Flow
-
-```
-PLANNING → PLAN_REVIEW → READY → EXECUTING_PHASE_1 → CODE_REVIEW 
-                ↓                        ↓               ↓
-            BLOCKED              BLOCKED (stuck)    REVISE (back to executor, max 3x)
-                                                         ↓
-                                                       FAIL (re-plan → BLOCKED)
-     
-After CODE_REVIEW PASS:
-  → More phases? → EXECUTING_PHASE_N
-  → Last phase? → MERGE_REVIEW → MERGE_READY → (human approves) → COMPLETE
-```
-
-## Orchestrator Checks Status
-
-To know what to do, read the **Status** field:
-- `PLANNING` → spawn planner
-- `PLAN_REVIEW` → spawn plan reviewer  
-- `READY` → spawn executor for Phase 1
-- `EXECUTING_PHASE_N` → executor working (or spawn if not running)
-- `CODE_REVIEW` → spawn code reviewer
-- `BLOCKED` → report to human with open questions
-- `MERGE_REVIEW` → spawn merge reviewer
-- `MERGE_READY` → report to human for merge approval
-- `COMPLETE` → report success
+Run the repository's full tests/lint/build checks, compare the cumulative result with `DONE_WHEN`, complete `## Completion` with evidence, move the task to `tasks/completed/`, update the GTM, and commit the ledger update. Follow the recorded delivery strategy; do not push, merge, open a PR, or deploy unless authorized.
