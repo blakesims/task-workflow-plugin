@@ -51,13 +51,11 @@ handoff packet, baseline checks, artifact writes, or review loop.
 
 ## Deprecated shell wrapper
 
-`scripts/workflow.sh` is intentionally unsupported and exits with status 64.
-The historical wrapper supplied short prompts such as “execute phase 1,” which
-could not preserve `DONE_WHEN`, scope-out constraints, runtime strategy,
-baselines, artifact paths, revision feedback, or commit boundaries. It is kept
-only as an explicit tombstone for existing automation. Migrate to
-`/task-workflow:task-start` or build an advanced integration from the canonical
-skill contract.
+`scripts/workflow.sh` remains as a deprecated v0.3.x compatibility wrapper. It
+invokes the same namespaced agents and preserves existing automation, but its
+historical short prompts cannot carry the complete Handoff Packet or enforce
+reviewed-path commit gates. New integrations must use
+`/task-workflow:task-start` or build against the canonical skill contract.
 
 ## Safe validation and discovery smoke
 

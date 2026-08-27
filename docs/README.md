@@ -39,7 +39,7 @@ Human → Intent + Handoff → Planner → Plan Reviewer → Executor → Code R
 From the marketplace:
 
 ```bash
-claude plugin marketplace add blakesims/task-workflow-plugin
+claude plugin marketplace add blakesims/task-workflow-plugin#v0.3.1
 claude plugin install task-workflow@task-workflow-marketplace
 ```
 
@@ -93,9 +93,11 @@ canonical handoff and gate semantics. Direct agent invocation is not the
 student/onboarding path; omitting the full Task Workflow Handoff Packet can
 silently weaken intent and Git safety. See the [advanced CLI reference](./cli-reference.md).
 
-`scripts/workflow.sh` is intentionally deprecated and exits without invoking an
-agent because the old wrapper did not preserve the canonical handoff or commit
-gates.
+`scripts/workflow.sh` is intentionally deprecated but remains available as a
+v0.3.x compatibility wrapper. It invokes the same namespaced agents, but the
+historical short prompt contract cannot preserve the complete canonical handoff
+or reviewed-path commit gates. Existing automation can migrate without an
+emergency break; all new student and interactive work must use `task-start`.
 
 ### Optional Pi extension
 

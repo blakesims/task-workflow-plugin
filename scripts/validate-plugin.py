@@ -166,7 +166,13 @@ def validate(root: Path) -> list[str]:
 
     wrapper = root / "scripts/workflow.sh"
     wrapper_text = wrapper.read_text(encoding="utf-8")
-    check("intentionally unsupported" in wrapper_text and "exit 64" in wrapper_text, "workflow.sh must be an unsupported tombstone", errors)
+    check(
+        "DEPRECATED" in wrapper_text
+        and "task-workflow:task-start" in wrapper_text
+        and "--agent" in wrapper_text,
+        "workflow.sh must remain a deprecated v0.3.x compatibility wrapper",
+        errors,
+    )
     smoke = root / "scripts/smoke-install.sh"
     smoke_text = smoke.read_text(encoding="utf-8")
     for phrase in ("claude plugin validate --strict", "/task-workflow:task-start", "--tools \"\"", "tasks/main-template.md"):
