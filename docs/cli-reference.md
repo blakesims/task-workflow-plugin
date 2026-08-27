@@ -1,170 +1,95 @@
-# CLI Reference
+# Advanced CLI Reference
 
-## Requirements
+The supported onboarding path is the interactive skill:
 
-- **Claude Code v2.1.23+** — The `--agent` flag for invoking plugin agents was added in this version
-
-## Installation
-
-The plugin can be installed via marketplace:
-
-```bash
-# Add the marketplace
-/plugin marketplace add ~/repos/task-workflow-plugin
-
-# Install the plugin
-/plugin install task-workflow@task-workflow-marketplace
+```text
+/task-workflow:task-start
 ```
 
-Or for development:
+It owns intent capture, the complete Task Workflow Handoff Packet, runtime Git
+strategy, review loops, and reviewed-path commits. Do not teach new users to
+invoke specialist agents one-by-one.
+
+## Trust, workspace, and delivery boundary
+
+The specialist agents are high-trust roles with Bash, Edit, and Write access so
+they can inspect repositories, persist task/review artifacts, and run checks.
+Use them only in a trusted repository. Begin from a clean feature branch unless
+project instructions explicitly choose a clean current branch or isolated
+worktree.
+
+After a review `PASS`, the parent orchestrator auto-commits only explicit paths
+the reviewer inspected. It never automatically pushes, opens or merges a PR,
+deploys, force-pushes, or deletes a branch. Explicit authorization (or an
+already-authorized repository workflow) is required for those actions.
+
+## Advanced external orchestration
+
+Claude Code 2.1.23+ supports direct namespaced agent calls. External systems may
+use this interface only if they reproduce the canonical handoff and gate
+contract from `skills/task-start/SKILL.md`:
+
 ```bash
-claude --plugin-dir ~/repos/task-workflow-plugin
-```
-
-## Two Orchestration Modes
-
-This plugin supports two orchestration patterns:
-
-### 1. External Orchestrator (scripts, CI, custom agents)
-
-Use the CLI with `-p` mode:
-
-```bash
-claude --agent task-workflow:planner \
-  -p "Create plan for T007" \
+claude --plugin-dir /path/to/task-workflow-plugin \
+  --agent task-workflow:planner \
   --output-format json \
-  --json-schema "$(cat schemas/planner-output.json)"
+  --json-schema "$(cat /path/to/task-workflow-plugin/schemas/planner-output.json)" \
+  -p "<complete Task Workflow Handoff Packet, including verbatim DONE_WHEN>"
 ```
 
-**Pros:**
-- Schema validation via `--json-schema`
-- Structured JSON output for parsing gates
-- Works from any environment
+| Agent | Full name | Structured gate |
+|---|---|---|
+| planner | `task-workflow:planner` | submits plan |
+| plan reviewer | `task-workflow:plan-reviewer` | `READY` / `NEEDS_WORK` / `NOT_READY` |
+| executor | `task-workflow:executor` | `COMPLETE` / `BLOCKED` |
+| code reviewer | `task-workflow:code-reviewer` | `PASS` / `REVISE` / `FAIL` |
 
-**Cons:**
-- Requires PTY for external orchestrators (see lessons-learned.md)
-- Process spawn overhead
+Schemas live in `schemas/`. In native interactive orchestration, the `Agent`
+tool starts these namespaced roles and durable Markdown artifacts carry gates.
+External callers may use JSON schemas, but schema validity does not replace the
+handoff packet, baseline checks, artifact writes, or review loop.
 
-### 2. Claude Code as Orchestrator
+## Deprecated shell wrapper
 
-Use the current `Agent` tool with a namespaced `subagent_type`:
+`scripts/workflow.sh` remains as a deprecated v0.3.x compatibility wrapper. It
+invokes the same namespaced agents and preserves existing automation, but its
+historical short prompts cannot carry the complete Handoff Packet or enforce
+reviewed-path commit gates. New integrations must use
+`/task-workflow:task-start` or build against the canonical skill contract.
 
-```
-Agent(
-  subagent_type="task-workflow:planner",
-  prompt="Create plan for T007..."
-)
-```
-
-The canonical `/task-workflow:task-start` skill creates these calls and routes their gates automatically.
-
-**Pros:**
-- Native integration, no PTY issues
-- Lower overhead
-- Easy parallel execution
-
-**Cons:**
-- No `--json-schema` support (text output only)
-- Gate parsing requires reading main.md
-
-## Agent Names
-
-Plugin agents are namespaced. Always use the full name:
-
-| Agent | Full Name |
-|-------|-----------|
-| planner | `task-workflow:planner` |
-| plan-reviewer | `task-workflow:plan-reviewer` |
-| executor | `task-workflow:executor` |
-| code-reviewer | `task-workflow:code-reviewer` |
-
-## workflow.sh Script
-
-The `scripts/workflow.sh` orchestrator script wraps the CLI with sensible defaults:
+## Safe validation and discovery smoke
 
 ```bash
-# Usage
-workflow.sh <agent> <task-id> [phase] [extra-prompt]
-
-# Examples
-workflow.sh planner T007 "" "Create an auth system with JWT"
-workflow.sh plan-reviewer T007
-workflow.sh executor T007 1
-workflow.sh code-reviewer T007 1
+python3 scripts/validate-plugin.py
+claude plugin validate --strict .
+scripts/smoke-install.sh
 ```
 
-Features:
-- Auto-finds task directory by ID pattern (`T007-*`)
-- Loads correct JSON schema per agent
-- Sets appropriate `--allowedTools` per role
-- JSON output to stdout, logs to stderr
-- Configurable timeout (default 5 min)
+The smoke creates a temporary fresh copy and project bootstrap. If Claude CLI is
+available, default mode performs a tool-disabled, sessionless skill invocation.
+Use `--static` in unauthenticated CI or `--runtime` when runtime discovery must
+be mandatory.
 
-Environment variables:
-- `WORKDIR` — Project directory (default: current directory)
-- `TIMEOUT` — Command timeout in seconds (default: 300)
+## Optional Pi extension
 
-## CLI Flags Reference
-
-### Essential Flags
-
-| Flag | Purpose |
-|------|---------|
-| `--agent <name>` | Invoke a named agent (e.g., `task-workflow:planner`) |
-| `-p <prompt>` | Non-interactive mode, required for scripting |
-| `--output-format json` | Return structured JSON with metadata |
-| `--json-schema <schema>` | Validate output against JSON schema |
-| `--allowedTools <tools>` | Auto-approve specific tools |
-
-### Recommended Tool Permissions
+`pi-extension/` is an optional advanced experiment, separate from Claude Code
+plugin onboarding and runtime. Its deterministic graph-engine test is:
 
 ```bash
-# Planner and reviewers write durable task/review artifacts and run validation
---allowedTools "Read,Write,Edit,Glob,Grep,Bash"
-
-# Executor (needs write access)
---allowedTools "Read,Write,Edit,Glob,Grep,Bash"
-
-# Phase-reviewer (can update plan)
---allowedTools "Read,Write,Edit,Glob,Grep,Bash"
+cd pi-extension
+npm ci
+npm test
 ```
 
-### Full Command Template
-
-```bash
-cd "$PROJECT_DIR" && claude \
-  --agent task-workflow:executor \
-  --output-format json \
-  --json-schema "$(cat schemas/executor-output.json)" \
-  --allowedTools "Read,Write,Edit,Glob,Grep,Bash" \
-  -p "Execute Phase 1 from tasks/active/T007-feature/main.md"
-```
-
-## Parsing Output
-
-The JSON output includes metadata and structured output:
-
-```bash
-# Extract the gate decision
-workflow.sh plan-reviewer T007 | jq '.structured_output.gate'
-
-# Check if all checklist items passed
-workflow.sh executor T007 1 | jq '.structured_output.checklist | to_entries | all(.value == true)'
-
-# Get summary
-workflow.sh code-reviewer T007 1 | jq -r '.structured_output.summary'
-```
+`test-spawn-worker.ts` and `test-orchestrator.ts` require a live Pi/LLM setup and
+are intentionally not CI tests.
 
 ## Troubleshooting
 
-### "unknown option '--agent'"
-Update Claude Code: `claude update` or `npm update -g @anthropic-ai/claude-code`
-
-### Agent not found
-Ensure the plugin is installed. Check with `/plugin` in Claude Code.
-
-### Timeout with no output (external orchestrator)
-Use PTY when spawning from external tools. See lessons-learned.md section on PTY.
-
-### Permission denied on file writes
-Add write tools: `--allowedTools "Read,Write,Edit,Bash"`
+- **Agent not found:** validate the plugin, then confirm `--plugin-dir` or the
+  marketplace install points to this release.
+- **Unknown `--agent`:** update Claude Code to 2.1.23 or newer.
+- **Write denied:** prefer interactive `task-start`; do not broadly bypass
+  permissions in an untrusted repository.
+- **Dirty workspace:** preserve unrelated work and use a separate worktree when
+  repository policy permits; never “fix” it with stash/reset/delete.

@@ -15,9 +15,9 @@ Each skill has `source_repo` and `source_path` in its frontmatter pointing back 
 ```
 skills/           # Skill definitions (SKILL.md files)
 agents/           # Agent definitions
-docs/             # Architecture, CLI reference, lessons learned
-schemas/          # JSON schemas for structured output
-scripts/          # workflow.sh CLI wrapper
+docs/             # Architecture, advanced CLI reference, quarantined history
+schemas/          # JSON schemas for advanced structured-output integrations
+scripts/          # Release validator, fresh-install smoke, deprecated wrapper
 ```
 
 ## Development

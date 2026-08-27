@@ -1,5 +1,13 @@
 {
+  "private": true,
+  "description": "Optional advanced Pi graph-engine experiments for task-workflow-plugin.",
+  "scripts": {
+    "test": "tsx test-graph-engine.ts"
+  },
   "dependencies": {
     "yaml": "^2.8.3"
+  },
+  "devDependencies": {
+    "tsx": "^4.20.5"
   }
 }

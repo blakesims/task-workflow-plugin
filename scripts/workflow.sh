@@ -13,6 +13,12 @@
 
 set -euo pipefail
 
+cat >&2 <<'EOF'
+[workflow] DEPRECATED: scripts/workflow.sh remains available for v0.3.x compatibility,
+but it cannot enforce the complete Task Workflow Handoff Packet or reviewed-path
+commit gates. New interactive work should use /task-workflow:task-start.
+EOF
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_DIR="$(dirname "$SCRIPT_DIR")"
 SCHEMAS_DIR="$PLUGIN_DIR/schemas"
@@ -20,7 +26,6 @@ SCHEMAS_DIR="$PLUGIN_DIR/schemas"
 # Colors for stderr logging
 RED='\033[0;31m'
 GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
@@ -91,10 +96,10 @@ esac
 [[ ! -f "$SCHEMA_FILE" ]] && { error "Schema not found: $SCHEMA_FILE"; exit 1; }
 
 # Find task directory
-TASK_DIR=$(find "$WORKDIR/tasks/active" -maxdepth 1 -type d -name "${TASK_ID}-*" 2>/dev/null | head -1)
+TASK_DIR=$(find "$WORKDIR/tasks/active" -maxdepth 1 -type d -name "${TASK_ID}-*" 2>/dev/null | head -1 || true)
 if [[ -z "$TASK_DIR" ]]; then
   # Try planning directory
-  TASK_DIR=$(find "$WORKDIR/tasks/planning" -maxdepth 1 -type d -name "${TASK_ID}-*" 2>/dev/null | head -1)
+  TASK_DIR=$(find "$WORKDIR/tasks/planning" -maxdepth 1 -type d -name "${TASK_ID}-*" 2>/dev/null | head -1 || true)
 fi
 if [[ -z "$TASK_DIR" ]]; then
   error "Task directory not found for $TASK_ID in $WORKDIR/tasks/{active,planning}/"
