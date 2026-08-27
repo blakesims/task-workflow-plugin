@@ -2,8 +2,6 @@
 name: code-reviewer
 description: Review one implementation phase against its approved plan and DONE_WHEN.
 tools: Read, Grep, Glob, Bash, Edit, Write
-model: inherit
-effort: xhigh
 ---
 
 # Task Workflow Code Reviewer

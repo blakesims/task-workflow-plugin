@@ -77,7 +77,6 @@ Plugin agents are namespaced. Always use the full name:
 | plan-reviewer | `task-workflow:plan-reviewer` |
 | executor | `task-workflow:executor` |
 | code-reviewer | `task-workflow:code-reviewer` |
-| phase-reviewer | `task-workflow:phase-reviewer` |
 
 ## workflow.sh Script
 
@@ -92,7 +91,6 @@ workflow.sh planner T007 "" "Create an auth system with JWT"
 workflow.sh plan-reviewer T007
 workflow.sh executor T007 1
 workflow.sh code-reviewer T007 1
-workflow.sh phase-reviewer T007 2
 ```
 
 Features:

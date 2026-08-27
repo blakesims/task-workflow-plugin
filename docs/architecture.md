@@ -31,13 +31,13 @@ Optional intent-harden
   ↓
 Canonical Task Workflow Handoff Packet
   ↓
+ROUTE ── quickfix ──► executor → code-reviewer → COMPLETE
+  ↓ planned
 planner → plan-reviewer
   ↓ READY
-executor → code-reviewer → optional phase-reviewer
+per phase: executor → code-reviewer
   ↓
-repeat phases
-  ↓
-final holistic review → COMPLETE
+final holistic review (if >1 phase) → COMPLETE
 ```
 
 ## Runtime strategy
@@ -92,7 +92,6 @@ tasks/
 | `task-workflow:plan-reviewer` | Verify alignment, executability, and validation | `READY` / `NEEDS_WORK` / `NOT_READY` |
 | `task-workflow:executor` | Implement one approved phase without committing | `COMPLETE` / `BLOCKED` |
 | `task-workflow:code-reviewer` | Inspect Git reality, tests, ACs, and `DONE_WHEN` | `PASS` / `REVISE` / `FAIL` |
-| `task-workflow:phase-reviewer` | Carry evidence into later phases when needed | `GO` / `UPDATE` / `BLOCK` |
 
 The parent owns task routing, explicit-path staging, commits after `PASS`, GTM updates, and completion.
 

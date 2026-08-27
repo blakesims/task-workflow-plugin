@@ -2,8 +2,6 @@
 name: plan-reviewer
 description: Review implementation plans against DONE_WHEN, scope, and executability.
 tools: Read, Grep, Glob, Bash, Edit, Write
-model: inherit
-effort: xhigh
 ---
 
 # Task Workflow Plan Reviewer

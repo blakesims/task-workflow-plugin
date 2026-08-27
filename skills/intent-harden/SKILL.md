@@ -1,6 +1,6 @@
 ---
 name: intent-harden
-description: Optionally stress-test and tighten an Intent Contract before task planning.
+description: Stress-test and tighten an Intent Contract before planning. Use whenever there are likely ambiguities in the current discussion about how the task will end up being implemented — primarily end-user stories or product-level differences.
 user-invocable: true
 source_repo: https://github.com/blakesims/task-workflow-plugin
 source_path: skills/intent-harden/SKILL.md

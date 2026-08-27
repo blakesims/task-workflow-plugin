@@ -2,8 +2,6 @@
 name: planner
 description: Create implementation plans from an agreed task Intent Contract.
 tools: Read, Grep, Glob, Bash, Edit, Write
-model: inherit
-effort: xhigh
 ---
 
 # Task Workflow Planner

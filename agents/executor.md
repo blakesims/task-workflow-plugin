@@ -2,7 +2,6 @@
 name: executor
 description: Implement one approved task phase exactly as scoped.
 tools: Read, Grep, Glob, Bash, Edit, Write
-model: sonnet
 ---
 
 # Task Workflow Executor

@@ -14,7 +14,6 @@ EXPECTED_AGENTS = {
     "plan-reviewer",
     "executor",
     "code-reviewer",
-    "phase-reviewer",
 }
 EXPECTED_SKILLS = {"task-start", "intent-harden", "start", "task-workflow"}
 
@@ -65,8 +64,8 @@ def main() -> int:
     task_start_meta = frontmatter(ROOT / "skills/task-start/SKILL.md")
     check(task_start_meta.get("user-invocable") == "true", "task-start is not user-invocable", errors)
     check(
-        task_start_meta.get("disable-model-invocation") == "true",
-        "task-start can be invoked automatically despite side effects",
+        task_start_meta.get("disable-model-invocation") != "true",
+        "task-start blocks model invocation; the natural-language front door must stay open",
         errors,
     )
 
@@ -74,6 +73,8 @@ def main() -> int:
     for agent in EXPECTED_AGENTS:
         check(f"task-workflow:{agent}" in task_start, f"task-start does not reference {agent}", errors)
     check("/task-workflow:intent-harden" in task_start, "task-start does not offer intent-harden", errors)
+    check("quickfix" in task_start, "task-start lacks the quickfix lane", errors)
+    check("phase-reviewer" not in task_start, "task-start references the removed phase-reviewer", errors)
     check("Task(subagent_type" not in task_start, "task-start uses legacy Task delegation", errors)
     check(
         "Never use `git add .`, `git add -A`" in task_start,
@@ -81,6 +82,7 @@ def main() -> int:
         errors,
     )
     check(not (ROOT / "schemas/merge-reviewer-output.json").exists(), "obsolete merge-reviewer schema still ships", errors)
+    check(not (ROOT / "schemas/phase-reviewer-output.json").exists(), "obsolete phase-reviewer schema still ships", errors)
     code_schema = (ROOT / "schemas/code-reviewer-output.json").read_text()
     check("MERGE_REVIEW" not in code_schema, "code-reviewer schema references removed MERGE_REVIEW state", errors)
     alias = (ROOT / "skills/start/SKILL.md").read_text()
@@ -88,7 +90,7 @@ def main() -> int:
     check("`Skill` tool" not in alias, "start alias tries to model-invoke protected task-start", errors)
 
     template = (ROOT / "templates/main.md").read_text()
-    for field in ("DONE_WHEN", "Runtime Strategy", "Baseline SHA", "Intent hardening", "Plan Review", "Code Review Log"):
+    for field in ("DONE_WHEN", "Runtime Strategy", "Baseline SHA", "Lane", "Intent hardening", "Plan Review", "Code Review Log"):
         check(field in template, f"template missing {field}", errors)
 
     if errors:

@@ -8,7 +8,6 @@
 #   workflow.sh plan-reviewer T007
 #   workflow.sh executor T007 1
 #   workflow.sh code-reviewer T007 1
-#   workflow.sh phase-reviewer T007 2
 #
 # Outputs JSON to stdout, logs to stderr
 
@@ -38,11 +37,10 @@ Agents:
   plan-reviewer  Review plan, decide READY/NEEDS_WORK/NOT_READY
   executor       Execute a phase
   code-reviewer  Review executed code, decide PASS/REVISE/FAIL
-  phase-reviewer Review before next phase, decide GO/UPDATE/BLOCK
 
 Arguments:
   task-id        Task identifier (e.g., T007)
-  phase          Phase number (required for executor, code-reviewer, phase-reviewer)
+  phase          Phase number (required for executor, code-reviewer)
   extra-prompt   Additional context for the agent
 
 Environment:
@@ -82,11 +80,6 @@ case "$AGENT" in
     SCHEMA_FILE="$SCHEMAS_DIR/code-reviewer-output.json"
     AGENT_NAME="task-workflow:code-reviewer"
     [[ -z "$PHASE" ]] && { error "code-reviewer requires phase number"; exit 1; }
-    ;;
-  phase-reviewer)
-    SCHEMA_FILE="$SCHEMAS_DIR/phase-reviewer-output.json"
-    AGENT_NAME="task-workflow:phase-reviewer"
-    [[ -z "$PHASE" ]] && { error "phase-reviewer requires phase number"; exit 1; }
     ;;
   *)
     error "Unknown agent: $AGENT"
@@ -131,9 +124,6 @@ case "$AGENT" in
   code-reviewer)
     PROMPT="Review the Phase $PHASE execution in $MAIN_MD for task $TASK_ID"
     ;;
-  phase-reviewer)
-    PROMPT="Review Phase $((PHASE - 1)) completion and prepare for Phase $PHASE. Task file: $MAIN_MD"
-    ;;
 esac
 
 # Load schema
@@ -141,13 +131,7 @@ SCHEMA=$(cat "$SCHEMA_FILE")
 
 # Build allowed tools based on agent
 case "$AGENT" in
-  planner|plan-reviewer|code-reviewer)
-    ALLOWED_TOOLS="Read,Write,Edit,Glob,Grep,Bash"
-    ;;
-  executor)
-    ALLOWED_TOOLS="Read,Write,Edit,Glob,Grep,Bash"
-    ;;
-  phase-reviewer)
+  planner|plan-reviewer|code-reviewer|executor)
     ALLOWED_TOOLS="Read,Write,Edit,Glob,Grep,Bash"
     ;;
 esac

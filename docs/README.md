@@ -12,7 +12,7 @@ The canonical entry point is:
 
 `/task-workflow:start` remains as a compatibility alias.
 
-The orchestrator forms an Intent Contract and `DONE_WHEN`, optionally hardens intent, chooses current branch / feature branch / worktree from repository context, and routes specialist agents through durable review gates:
+The orchestrator forms an Intent Contract and `DONE_WHEN`, optionally hardens intent, chooses current branch / feature branch / worktree from repository context, and routes the task into a lane: **quickfix** (small bounded change — planning skipped, code review kept) or **planned** (phased plan with review gates). Specialist agents then run through durable review gates:
 
 ```
 Human → Planner → Plan Reviewer → GATE → Executor → Code Reviewer → ...
@@ -42,7 +42,6 @@ claude plugin install task-workflow@task-workflow-marketplace
 | `plan-reviewer` | Reviews plans, validates questions | READY / NEEDS_WORK / NOT_READY |
 | `executor` | Implements phases | COMPLETE / BLOCKED |
 | `code-reviewer` | Reviews implementations | PASS / REVISE / FAIL |
-| `phase-reviewer` | Bridges phases, applies learnings | GO / UPDATE / BLOCK |
 
 ## Task Structure
 
@@ -135,12 +134,7 @@ Canonical orchestration skills:
 - `start` — compatibility alias for `task-start`
 - `task-workflow` — shared task ledger and Git-safety contract
 
-Legacy specialist reference skills remain available for compatibility:
-- `plan` — Planning workflow and templates
-- `execute` — Execution workflow
-- `review-plan` — Plan review checklist
-- `review-code` — Code review checklist
-- `review-phase` — Phase transition workflow
+The agent role instructions live in the agent definitions themselves (`agents/*.md`); there are no separate per-role skills.
 
 ## Self-Improvement
 

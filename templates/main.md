@@ -10,6 +10,8 @@
 - **Strategy Rationale:** —
 - **Delivery Expectation:** local only | push | PR | merge | deploy | other
 - **Baseline SHA:** —
+- **Lane:** quickfix | planned
+- **Intent hardening:** not offered | run | declined | skipped
 
 ## Task
 
@@ -51,11 +53,6 @@
 - **Assumptions:** —
 - **Risks:** —
 - **Validation expectations:** —
-
-### Intent hardening
-
-- **Status:** NOT_OFFERED | RUN | DECLINED | SKIPPED
-- **Hardened brief:** —
 
 ---
 
