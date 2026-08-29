@@ -1,7 +1,7 @@
 {
   "name": "task-workflow",
   "description": "Intent-led task workflow with specialist agents and gated phased execution, plus the standalone guide skills: intent-harden, grill-me, linear-independence, scientific-method, investigation-review, cca-task-shape, docs system, mockups, audit-rules, task-management-init.",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "author": {
     "name": "Blake Sims",
     "url": "https://github.com/blakesims"

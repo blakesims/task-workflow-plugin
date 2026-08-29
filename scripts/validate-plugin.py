@@ -5,12 +5,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import stat
 import sys
 from pathlib import Path
 
 DEFAULT_ROOT = Path(__file__).resolve().parents[1]
-RELEASE_VERSION = "0.4.0"
+RELEASE_VERSION = "0.4.1"
 EXPECTED_AGENTS = {"planner", "plan-reviewer", "executor", "code-reviewer"}
 EXPECTED_SKILLS = {
     "task-start", "intent-harden", "start", "task-workflow",
@@ -65,6 +66,10 @@ def validate(root: Path) -> list[str]:
         "templates/main.md",
         "templates/global-task-manager.md",
         "templates/CLAUDE.md",
+        "skills/doc-init/assets/config-template.yml",
+        "skills/doc-init/assets/new-note.sh",
+        "skills/doc-init/assets/refs-claude.md",
+        "skills/doc-init/assets/worklog-claude.md",
     ]
     required += [f"agents/{name}.md" for name in sorted(EXPECTED_AGENTS)]
     required += [f"skills/{name}/SKILL.md" for name in sorted(EXPECTED_SKILLS)]
@@ -103,6 +108,19 @@ def validate(root: Path) -> list[str]:
             errors.append(str(exc))
     check(agent_names == EXPECTED_AGENTS, f"agent set differs: expected {sorted(EXPECTED_AGENTS)}, got {sorted(agent_names)}", errors)
 
+    check(bool((root / "skills/doc-init/assets/new-note.sh").stat().st_mode & stat.S_IXUSR), "skills/doc-init/assets/new-note.sh is not executable", errors)
+
+    # Skills must be self-contained: assets resolve via ${CLAUDE_PLUGIN_ROOT}, never a
+    # user's skills directory or an absolute home path. Mentions of ~/.claude/skills are
+    # allowed only as prose; any command-like use (mkdir/curl/cp/-o) is a regression.
+    for path in sorted((root / "skills").glob("*/SKILL.md")):
+        text = path.read_text(encoding="utf-8")
+        check("/home/" not in text, f"{path.relative_to(root)} contains an absolute home path", errors)
+        for line in text.splitlines():
+            if any(pattern in line for pattern in ("mkdir -p ~/.claude/skills", "-o ~/.claude/skills", "-o \"$HOME/.claude/skills")) \
+                    or re.search(r"\bcp\b[^\n]*~/\.claude/skills", line):
+                errors.append(f"{path.relative_to(root)} installs into ~/.claude/skills: {line.strip()}")
+
     skill_dirs = {path.parent.name for path in (root / "skills").glob("*/SKILL.md")}
     check(skill_dirs == EXPECTED_SKILLS, f"skill set differs: expected {sorted(EXPECTED_SKILLS)}, got {sorted(skill_dirs)}", errors)
     for skill in EXPECTED_SKILLS:
@@ -138,6 +156,15 @@ def validate(root: Path) -> list[str]:
     check("${CLAUDE_PLUGIN_ROOT}/skills/task-start/SKILL.md" in alias, "start alias does not read canonical task-start", errors)
     shared = (root / "skills/task-workflow/SKILL.md").read_text(encoding="utf-8")
     check("The parent commits only after `PASS`" in shared, "shared contract lacks auto-commit boundary", errors)
+
+    init_skill = (root / "skills/task-management-init/SKILL.md").read_text(encoding="utf-8")
+    for phrase in (
+        "${CLAUDE_PLUGIN_ROOT}/templates/main.md",
+        "${CLAUDE_PLUGIN_ROOT}/templates/global-task-manager.md",
+        "${CLAUDE_PLUGIN_ROOT}/templates/CLAUDE.md",
+    ):
+        check(phrase in init_skill, f"task-management-init does not copy canonical template: {phrase}", errors)
+    check("## Intent Contract" in init_skill and "DONE_WHEN" in init_skill, "task-management-init lacks the canonical-template guard", errors)
 
     template = (root / "templates/main.md").read_text(encoding="utf-8")
     for field in ("DONE_WHEN", "Runtime Strategy", "Working Branch / Path", "Baseline SHA", "Lane", "Intent hardening", "Plan Review", "Code Review Log"):
