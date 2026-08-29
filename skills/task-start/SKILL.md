@@ -64,7 +64,9 @@ Draft in `main.md` before any planning:
 
 Ask the minimum questions needed to make `DONE_WHEN` and scope reliable.
 
-For non-trivial, ambiguous, user-facing, or data-sensitive work, offer `/task-workflow:intent-harden` before planning. Record the outcome on the `Intent hardening:` line in `main.md` (e.g. `run`, `declined`, `skipped — trivial task`). If it runs, the hardened brief replaces the draft contract.
+Then assess how much of the contract you had to invent. Count the material decisions the user's request left open: no verifiable `DONE_WHEN`, multiple plausible interpretations of the outcome, unstated scope boundaries, or an unspecified user-facing or data-sensitive surface. If two or more are open — or the work is non-trivial, ambiguous, user-facing, or data-sensitive — proactively offer intent hardening before planning, naming what is underspecified, e.g.: "Your request leaves N decisions open (list them). Want me to run `/task-workflow:intent-harden` first? ~5 minutes, and the planner inherits a much stronger contract." Use AskUserQuestion with run/skip options. Do not offer it for trivial work where the draft is already unambiguous.
+
+Record the outcome on the `Intent hardening:` line in `main.md` (e.g. `run`, `declined`, `skipped — trivial task`). If it runs, the hardened brief replaces the draft contract.
 
 ## Handoff Packet
 
