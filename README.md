@@ -1,6 +1,8 @@
 # Task Workflow Plugin
 
-A Claude Code plugin for intent-led, reviewed multi-agent development workflows.
+A Claude Code plugin for intent-led, reviewed multi-agent development workflows,
+bundled with the standalone skills from [guide.zenaitutoring.com](https://guide.zenaitutoring.com)
+(intent hardening, scientific method, docs system, task shaping, and more).
 
 ## Before you start: trust and Git boundaries
 
@@ -36,12 +38,28 @@ Human → Intent + Handoff → Planner → Plan Reviewer → Executor → Code R
 
 ## Install
 
-From the marketplace:
+Inside a Claude Code session:
+
+```text
+/plugin marketplace add blakesims/task-workflow-plugin
+/plugin install task-workflow@task-workflow-marketplace
+```
+
+If the install summary says so, activate it in the current session with:
+
+```text
+/reload-plugins
+```
+
+From the shell (or for an agent installing on your behalf):
 
 ```bash
-claude plugin marketplace add blakesims/task-workflow-plugin#v0.3.1
+claude plugin marketplace add blakesims/task-workflow-plugin
 claude plugin install task-workflow@task-workflow-marketplace
 ```
+
+A CLI install is not picked up by an already-running session until you run
+`/reload-plugins` in it. New sessions load it automatically.
 
 For local development:
 
@@ -51,6 +69,31 @@ claude --plugin-dir /path/to/task-workflow-plugin
 
 Then invoke `/task-workflow:task-start` in the trusted target repository. The
 first run bootstraps `tasks/` from `templates/`.
+
+## Bundled skills
+
+The workflow surface:
+
+| Skill | Purpose |
+|---|---|
+| `/task-workflow:task-start` | Canonical entry point — Intent Contract, routing, gated execution |
+| `/task-workflow:intent-harden` | Five-phase contract stress-test (composes grill-me + linear-independence) |
+| `/task-workflow:grill-me` | Relentless design interview down the decision tree |
+| `/task-workflow:linear-independence` | Compress questions to the smallest independent decision set |
+
+Standalone skills, usable with or without the workflow:
+
+| Skill | Purpose |
+|---|---|
+| `/task-workflow:cca-task-shape` | Shape a task via the CCA task-shape API (10-80-10 workflow) |
+| `/task-workflow:scientific-method` | Hypothesis-driven investigation instead of guessing |
+| `/task-workflow:investigation-review` | Adversarial review of an investigation verdict |
+| `/task-workflow:task-management-init` | Bootstrap the lightweight `tasks/` ledger in a project |
+| `/task-workflow:audit-rules` | Audit CLAUDE.md files for high-signal rules |
+| `/task-workflow:mockups` | Quick frontend mockups for fast iteration |
+| `/task-workflow:doc-init` | Set up the worklog/refs documentation system |
+| `/task-workflow:doc-new-note` | Create a worklog note via the project script |
+| `/task-workflow:doc-sweep` | End-of-day synthesis into daily/weekly summaries |
 
 ## Agents and gates
 

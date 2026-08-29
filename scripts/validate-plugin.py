@@ -10,9 +10,15 @@ import sys
 from pathlib import Path
 
 DEFAULT_ROOT = Path(__file__).resolve().parents[1]
-RELEASE_VERSION = "0.3.1"
+RELEASE_VERSION = "0.4.0"
 EXPECTED_AGENTS = {"planner", "plan-reviewer", "executor", "code-reviewer"}
-EXPECTED_SKILLS = {"task-start", "intent-harden", "start", "task-workflow"}
+EXPECTED_SKILLS = {
+    "task-start", "intent-harden", "start", "task-workflow",
+    "grill-me", "linear-independence", "cca-task-shape",
+    "scientific-method", "investigation-review",
+    "task-management-init", "audit-rules", "mockups",
+    "doc-init", "doc-new-note", "doc-sweep",
+}
 HIGH_TRUST_TOOLS = {"Bash", "Edit", "Write"}
 
 
