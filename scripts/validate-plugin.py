@@ -50,6 +50,8 @@ def check(condition: bool, message: str, errors: list[str]) -> None:
 
 
 def validate(root: Path) -> list[str]:
+    """Return release-surface validation errors for the plugin rooted at ``root``."""
+
     errors: list[str] = []
     required = [
         ".claude-plugin/plugin.json",
