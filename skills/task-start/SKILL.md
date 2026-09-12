@@ -129,7 +129,7 @@ Never use `git add .`, `git add -A`, or broad path globs. Never stage a path the
 After every phase passes:
 
 - run the repository's full tests/lint/build checks;
-- if the task had more than one phase, dispatch the code reviewer on the cumulative diff from the task baseline SHA through `HEAD` against `DONE_WHEN`, writing `final-review.md` and a compact final-review gate/path entry under `## Code Review Log`; require `PASS`. On `REVISE`, the executor reads that exact report and repairs within approved scope, then the cumulative review runs again (maximum three cycles);
+- if the task had more than one phase, dispatch the code reviewer on the cumulative diff from the task baseline SHA through the **current working tree** (including any uncommitted repairs and explicitly enumerated untracked files) against `DONE_WHEN`, writing `final-review.md` and a compact final-review gate/path entry under `## Code Review Log`; require `PASS`. On `REVISE`, the executor reads that exact report and repairs within approved scope, then the cumulative review runs again against the working tree (maximum three cycles). After `PASS`, the parent verifies/stages only reviewed source and report paths and commits any repairs before completion; on `FAIL` or exhausted cycles, block rather than complete;
 - write full completion evidence to `completion.md`; update only date/outcome/report path under `## Completion` in `main.md`, set status `COMPLETE`, move the task to `tasks/completed/`, update the GTM, and commit the ledger updates;
 - follow the recorded delivery strategy; do not push, merge, open a PR, or deploy unless authorized.
 
