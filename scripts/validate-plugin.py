@@ -61,6 +61,7 @@ def validate(root: Path) -> list[str]:
         "docs/cli-reference.md",
         "docs/lessons-learned.md",
         "scripts/smoke-install.sh",
+        "scripts/test-report-pointers.py",
         "scripts/workflow.sh",
         "pi-extension/package.json",
         "templates/main.md",
@@ -169,6 +170,8 @@ def validate(root: Path) -> list[str]:
     template = (root / "templates/main.md").read_text(encoding="utf-8")
     for field in ("DONE_WHEN", "Runtime Strategy", "Working Branch / Path", "Baseline SHA", "Lane", "Intent hardening", "Plan Review", "Code Review Log"):
         check(field in template, f"template missing {field}", errors)
+    check("phase-report-pointers-v1" in template, "template lacks report-pointer contract", errors)
+    check("execution-phase-1.md" in template, "template lacks execution report pointer", errors)
     for name in ("main.md", "global-task-manager.md", "CLAUDE.md"):
         check((root / "templates" / name).is_file(), f"bootstrap template missing: {name}", errors)
 
@@ -222,6 +225,7 @@ def validate(root: Path) -> list[str]:
     ci = (root / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     for command in (
         "python3 scripts/validate-plugin.py",
+        "python3 scripts/test-report-pointers.py",
         "claude plugin validate --strict .",
         "bash -n scripts/*.sh",
         "python3 -m compileall -q scripts",

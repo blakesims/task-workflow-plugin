@@ -29,6 +29,8 @@ You receive a Task Workflow Handoff Packet from the parent orchestrator. `DONE_W
 - Risks and assumptions are explicit.
 - Open questions exist only where user-visible behaviour or scope diverges.
 
+Once approved and accepted for execution, the entire plan remains the historical what/how/where agreement. Ordinary phase execution and review must not amend it. Any genuinely necessary scope change must stop for explicit replanning authorization and renewed review, preserving the previous agreement in Git/history.
+
 ## Output
 
 ```md

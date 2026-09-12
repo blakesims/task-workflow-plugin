@@ -16,8 +16,8 @@ If `tasks/` does not exist, go to Step 2.
 
 If `tasks/` already exists, do not overwrite anything silently:
 
-1. Read `tasks/main-template.md`. If it contains an `## Intent Contract` section and a `DONE_WHEN` heading, the ledger is already canonical — report that and stop.
-2. If it is missing those sections (a legacy template), tell the user their template predates the Intent Contract workflow and `/task-workflow:task-start` will not work correctly with it. Offer to upgrade: back up the old file to `tasks/main-template.legacy.md`, then continue with Step 3 (templates only — leave existing task folders and the populated `global-task-manager.md` untouched, other than telling the user new tasks will use the new template).
+1. Read `tasks/main-template.md`. If it contains `## Intent Contract`, `DONE_WHEN`, and the `phase-report-pointers-v1` marker, the template has the current report-pointer structure — report that and stop.
+2. If any are missing (including an older Intent Contract template with inline execution logs), explain the template needs the report-pointer update. Offer to upgrade: back up the old file to `tasks/main-template.legacy.md`, then continue with Step 3 (templates only — leave existing task folders and the populated `global-task-manager.md` untouched, other than telling the user new tasks will use the new template).
 
 ## Step 2: Create the directory structure
 
@@ -33,7 +33,7 @@ cp ${CLAUDE_PLUGIN_ROOT}/templates/global-task-manager.md tasks/global-task-mana
 cp ${CLAUDE_PLUGIN_ROOT}/templates/CLAUDE.md tasks/CLAUDE.md
 ```
 
-Copy verbatim (`cp` only — no paraphrasing, no regeneration). When upgrading an existing ledger, skip `global-task-manager.md` if it already has task rows.
+The three commands above are for a **new ledger only**. Copy the canonical template verbatim (`cp` only — no paraphrasing, no regeneration). For an approved upgrade, first create a non-overwriting backup of `tasks/main-template.md`, then copy only the new `templates/main.md` to it. Leave the existing `global-task-manager.md` and all task folders untouched. Read the existing `tasks/CLAUDE.md` and merge only the report-pointer guidance, preserving every project-specific rule; do not run the unconditional copy commands over an existing ledger.
 
 Then open `tasks/CLAUDE.md` and fill in the `## Project-specific rules` section with the user (Git strategy, validation commands, delivery expectation, extra gates). Ask only what cannot be inferred from the repository.
 
@@ -51,7 +51,7 @@ tasks/global-task-manager.md
 tasks/main-template.md
 ```
 
-Confirm `tasks/main-template.md` contains `## Intent Contract` and `DONE_WHEN`.
+Confirm `tasks/main-template.md` contains `## Intent Contract`, `DONE_WHEN`, and `phase-report-pointers-v1`; phase entries have report pointers rather than inline evidence fields. Preserve existing task folders and project-specific rules during upgrades; never overwrite an existing backup.
 
 ## Done
 

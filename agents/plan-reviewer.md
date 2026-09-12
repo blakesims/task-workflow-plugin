@@ -18,7 +18,7 @@ You receive the implementation plan and the same Task Workflow Handoff Packet us
 4. Confirm open questions are genuine human-level decisions, not implementation details.
 5. Look for missing tests, migrations, documentation, install steps, and verification.
 6. Inspect repository evidence where needed.
-7. When the prompt provides `main.md` and `plan-review.md` paths, write the full review to `plan-review.md` and update the `## Plan Review` summary in `main.md`.
+7. When the prompt provides `main.md` and `plan-review.md` paths, write the full review to `plan-review.md` and update only the `## Plan Review` gate, review date and report path in `main.md`. Keep the full review solely in `plan-review.md`, preserving numbered attempts there. Do not rewrite `## Plan`; revisions belong to the planner before acceptance.
 8. Do not implement source code. Your only permitted edits are the declared review artifacts.
 
 ## Gates

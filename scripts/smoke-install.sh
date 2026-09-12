@@ -25,6 +25,7 @@ cp "$ROOT/README.md" "$INSTALL/README.md"
 rm -rf "$INSTALL/pi-extension/node_modules"
 
 python3 "$INSTALL/scripts/validate-plugin.py" --root "$INSTALL"
+python3 "$INSTALL/scripts/test-report-pointers.py"
 cp "$INSTALL/templates/main.md" "$PROJECT/tasks/main-template.md"
 cp "$INSTALL/templates/global-task-manager.md" "$PROJECT/tasks/global-task-manager.md"
 cp "$INSTALL/templates/CLAUDE.md" "$PROJECT/tasks/CLAUDE.md"
