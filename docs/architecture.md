@@ -68,7 +68,10 @@ tasks/
 │   └── TXXX-task/
 │       ├── main.md
 │       ├── plan-review.md
-│       └── code-review-phase-N.md
+│       ├── execution-phase-N.md
+│       ├── code-review-phase-N.md
+│       ├── final-review.md
+│       └── completion.md
 ├── paused/
 └── completed/
 ```
@@ -79,10 +82,17 @@ tasks/
 - Intent Contract and `DONE_WHEN`;
 - optional intent-hardening result;
 - approved phased plan;
-- plan-review summary;
-- per-phase baseline and execution evidence;
-- code-review summaries;
-- completion evidence.
+- compact plan-review gate/date/report pointer;
+- per-phase execution status/report pointers;
+- per-phase code-review outcome/date/report pointers;
+- compact completion outcome/date/report pointer.
+
+The entire approved plan stays in place and unchanged during execution. Separate
+reports contain baselines, commands, findings and attempt history. Executors and
+reviewers write their reports first, then update their own compact entries. On
+REVISE, the executor opens the linked full review before repairing. The parent
+checks the accepted specification against Git and verifies report freshness;
+these are prompt-level gates, not a filesystem sandbox.
 
 ## Agents
 

@@ -74,7 +74,10 @@ tasks/
 ├── active/TXXX-task/
 │   ├── main.md
 │   ├── plan-review.md
-│   └── code-review-phase-N.md
+│   ├── execution-phase-N.md
+│   ├── code-review-phase-N.md
+│   ├── final-review.md
+│   └── completion.md
 ├── paused/
 └── completed/
 ```
@@ -82,7 +85,14 @@ tasks/
 `templates/main.md`, `templates/global-task-manager.md`, and
 `templates/CLAUDE.md` are copied during bootstrap. `main.md` records the Intent
 Contract, verbatim `DONE_WHEN`, lane, branch/worktree strategy, baseline SHA,
-plan, execution evidence, reviews, and completion evidence.
+and the entire approved phased plan. That specification remains the historical
+planning agreement. Executor/reviewer updates are compact status/outcome/report
+pointers, not inline logs. Full evidence stays in separate task-directory reports;
+on REVISE the executor reads the linked full review before repairing.
+
+Existing task history is preserved; template upgrades require consent. This is a
+prompt-driven contract, not filesystem enforcement. Regression tests check the
+shipped instructions and a two-phase report/pointer fixture, not live model compliance.
 
 ## Advanced integration surfaces
 
@@ -110,6 +120,7 @@ engine tests run in CI; tests that spawn a live LLM remain manual.
 
 ```bash
 python3 scripts/validate-plugin.py
+python3 scripts/test-report-pointers.py
 claude plugin validate --strict .
 bash -n scripts/*.sh
 python3 -m compileall -q scripts

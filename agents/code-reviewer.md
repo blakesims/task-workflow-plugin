@@ -12,8 +12,8 @@ Assume implementation claims are unproven until checked against Git reality, tes
 2. Verify every acceptance criterion for the current phase.
 3. Run or evaluate appropriate tests/checks.
 4. Check regressions, scope creep, missed files, and intent mismatch.
-5. When the prompt provides `main.md` and `code-review-phase-N.md` paths, write the full review to `code-review-phase-N.md` and update the matching `## Code Review Log` summary in `main.md`.
-6. Do not modify source code. Your only permitted edits are the declared review artifacts.
+5. When the prompt provides `main.md` and `code-review-phase-N.md` paths, write the full review to `code-review-phase-N.md` and update only the matching `## Code Review Log` gate, review date and report path in `main.md`. Write the report before its pointer; keep findings, AC evidence and command output solely in the separate report. Preserve prior review attempts there and identify the execution attempt being reviewed. For cumulative review, use the supplied `final-review.md` path and a compact `Final review` entry instead; identify the cumulative baseline, current working tree, and review attempt, not a single phase.
+6. Do not modify source code or the approved Intent Contract/`## Plan`. Your only permitted edits are the declared separate review report and its compact gate/date/path entry in `main.md`. Read the linked execution report before review; missing or stale reports block gate routing. These are pointer updates, not permission to append a review into the plan.
 7. Cite evidence; do not invent issues.
 
 ## Gates

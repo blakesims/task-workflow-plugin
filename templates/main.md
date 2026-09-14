@@ -93,28 +93,22 @@
 
 ## Plan Review
 
+- **Review attempt:** —
+- **Reviewed specification SHA-256:** —
 - **Gate:** —
 - **Reviewed:** —
-- **Summary:** —
-- **Issues:** —
-
-→ Details: `plan-review.md`
+- **Report:** — <!-- reviewer sets [plan review](plan-review.md) after writing it -->
 
 ---
 
 ## Execution Log
 
+<!-- phase-report-pointers-v1: compact status/path entries only; details in separate reports. -->
+
 ### Phase 1: {title}
 
 - **Status:** —
-- **Baseline SHA:** —
-- **Started:** —
-- **Completed:** —
-- **Commit:** —
-- **Files Modified:** —
-- **Validation:** —
-- **Notes:** —
-- **Blockers:** —
+- **Report:** — <!-- executor sets [execution](execution-phase-1.md) after writing it -->
 
 ---
 
@@ -124,20 +118,12 @@
 
 - **Gate:** —
 - **Reviewed:** —
-- **Issues:** —
-- **Summary:** —
-
-→ Details: `code-review-phase-1.md`
+- **Report:** — <!-- reviewer sets [review](code-review-phase-1.md) after writing it -->
 
 ---
 
 ## Completion
 
 - **Completed:** —
-- **DONE_WHEN evidence:** —
-- **Commits:** —
-- **Tests / checks:** —
-- **Review gates:** —
-- **Summary:** —
-- **Limitations / follow-ups:** —
-- **How to verify / understand:** —
+- **Outcome:** —
+- **Report:** — <!-- parent sets [completion](completion.md) after writing it -->

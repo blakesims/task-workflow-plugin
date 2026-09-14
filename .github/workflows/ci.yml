@@ -25,6 +25,7 @@ jobs:
       - name: Validate plugin and fresh-copy bootstrap
         run: |
           python3 scripts/validate-plugin.py
+          python3 scripts/test-report-pointers.py
           claude plugin validate --strict .
           scripts/smoke-install.sh --static
       - name: Check Bash and Python syntax

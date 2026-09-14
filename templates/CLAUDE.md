@@ -20,10 +20,15 @@ tasks/
 │   └── TXXX-task-slug/
 │       ├── main.md
 │       ├── plan-review.md
-│       └── code-review-phase-N.md
+│       ├── execution-phase-N.md
+│       ├── code-review-phase-N.md
+│       ├── final-review.md       # cumulative review when required
+│       └── completion.md
 ├── paused/                  # BLOCKED
 └── completed/               # COMPLETE
 ```
+
+The entire approved plan stays in `main.md` as the planning agreement. Executors/reviewers update only compact status/outcome/report pointers; full reports live in the files above. On `REVISE`, the executor reads the linked full review before repairs. Each numbered `plan-review.md` attempt records `Review attempt` and `Reviewed specification SHA-256` (the exact Task/Intent/entire Plan byte range defined in task-start); the compact Plan Review entry carries the same metadata outside the specification. Before `READY`, the parent checks the current specification digest and dispatched attempt against the latest report and pointer; missing or stale evidence blocks continuation. No automatic migration of historical tasks.
 
 ## Project-specific rules
 
