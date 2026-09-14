@@ -93,6 +93,8 @@
 
 ## Plan Review
 
+- **Review attempt:** —
+- **Reviewed specification SHA-256:** —
 - **Gate:** —
 - **Reviewed:** —
 - **Report:** — <!-- reviewer sets [plan review](plan-review.md) after writing it -->

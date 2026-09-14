@@ -18,8 +18,9 @@ You receive the implementation plan and the same Task Workflow Handoff Packet us
 4. Confirm open questions are genuine human-level decisions, not implementation details.
 5. Look for missing tests, migrations, documentation, install steps, and verification.
 6. Inspect repository evidence where needed.
-7. When the prompt provides `main.md` and `plan-review.md` paths, write the full review to `plan-review.md` and update only the `## Plan Review` gate, review date and report path in `main.md`. Keep the full review solely in `plan-review.md`, preserving numbered attempts there. Do not rewrite `## Plan`; revisions belong to the planner before acceptance.
-8. Do not implement source code. Your only permitted edits are the declared review artifacts.
+7. When the prompt provides `main.md` and `plan-review.md` paths, write the full review to `plan-review.md` and update only the `## Plan Review` gate, review date, reviewed specification SHA-256, review attempt and report path in `main.md`. Keep the full review solely in `plan-review.md`, preserving numbered attempts there. Do not rewrite `## Plan`; revisions belong to the planner before acceptance.
+8. Each numbered attempt must record `Review attempt` and `Reviewed specification SHA-256` supplied by the parent. Independently compute the SHA-256 of the exact UTF-8 bytes from `## Task\n` up to (excluding) `## Plan Review\n` in `main.md` (Task, Intent Contract and entire Plan, including separators; no normalization). Verify it matches before reviewing and again before writing a verdict. Missing or mismatched context is `NOT_READY`, never `READY`. Preserve prior attempts in `plan-review.md`; update only the current compact metadata outside the specification. A commit SHA alone cannot identify uncommitted plan edits.
+9. Do not implement source code. Your only permitted edits are the declared review artifacts.
 
 ## Gates
 
@@ -32,6 +33,9 @@ You receive the implementation plan and the same Task Workflow Handoff Packet us
 ```md
 ## Plan Review
 
+### Attempt {N}
+Review attempt: {N}
+Reviewed specification SHA-256: {digest}
 Gate: READY | NEEDS_WORK | NOT_READY
 
 ### Summary

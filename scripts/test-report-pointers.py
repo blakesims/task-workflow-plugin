@@ -2,6 +2,7 @@
 """Deterministic prompt/template regressions, not an LLM compliance test."""
 from pathlib import Path
 import re
+import hashlib
 import tempfile
 import unittest
 
@@ -91,13 +92,102 @@ class ReportPointers(unittest.TestCase):
     def test_upgrade_backup_collision_contract(self):
         """Require an explicit collision branch before replacing an old template."""
         init = (ROOT / 'skills/task-management-init/SKILL.md').read_text()
-        step = init.split('## Step 2:')[0]
+        step = init.split('## Step 2:')[0] + section(init, '## Step 3: Existing-ledger upgrade only')
         for phrase in ('check whether `tasks/main-template.legacy.md` exists',
                        'unique, non-overwriting backup path',
                        'or stop until the collision is resolved',
                        'Never overwrite an existing backup',
                        'Create and verify the backup before replacing'):
             self.assertIn(phrase, step)
+
+    def test_upgrade_branches_are_disjoint(self):
+        init = (ROOT / 'skills/task-management-init/SKILL.md').read_text()
+        new = section(init, '## Step 2: New ledger only')
+        upgrade = section(init, '## Step 3: Existing-ledger upgrade only')
+        self.assertIn('Skip Step 3 and go directly to Step 4', new)
+        self.assertIn('Never run Step 2', upgrade)
+        for target in ('global-task-manager.md', 'CLAUDE.md'):
+            command = f'cp ${{CLAUDE_PLUGIN_ROOT}}/templates/{target} tasks/{target}'
+            self.assertIn(command, new)
+            self.assertEqual(init.count(command), 1)
+            self.assertNotIn(command, upgrade)
+        for required in ('open(backup, "xb")', 'Compare the backup bytes',
+                         'Only after verified backup success', 'preserving every project-specific rule',
+                         'GTM and task-folder contents are unchanged'):
+            self.assertIn(required, upgrade)
+        # Exercise the prescribed exclusive backup primitive on a populated fixture.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            template = root / 'main-template.md'
+            template.write_bytes(b'legacy template')
+            backup = root / 'main-template.legacy.md'
+            backup.write_bytes(b'prior backup')
+            with self.assertRaises(FileExistsError):
+                with backup.open('xb') as out:
+                    out.write(template.read_bytes())
+            self.assertEqual(backup.read_bytes(), b'prior backup')
+            self.assertEqual(template.read_bytes(), b'legacy template')
+            fresh = root / 'main-template.legacy-unique.md'
+            with fresh.open('xb') as out:
+                out.write(template.read_bytes())
+            self.assertEqual(fresh.read_bytes(), template.read_bytes())
+
+    def test_plan_review_freshness_contract(self):
+        for path in ('agents/plan-reviewer.md', 'skills/task-workflow/SKILL.md',
+                     'templates/CLAUDE.md', 'templates/main.md'):
+            text = (ROOT / path).read_text()
+            self.assertIn('Review attempt', text)
+            self.assertIn('Reviewed specification SHA-256', text)
+        start = (ROOT / 'skills/task-start/SKILL.md').read_text()
+        for required in ('increment the review attempt monotonically',
+                         'clear the prior gate to pending', 'latest numbered attempt',
+                         'Recompute the current specification digest',
+                         'Reject missing or stale plan-review evidence',
+                         'Do not invent missing metadata', 'Recheck immediately before'):
+            self.assertIn(required, start)
+        reviewer = (ROOT / 'agents/plan-reviewer.md').read_text()
+        self.assertIn('again before writing a verdict', reviewer)
+        self.assertIn('A commit SHA alone cannot identify uncommitted plan edits', reviewer)
+
+    def test_plan_review_freshness_fixture(self):
+        """Model the documented gate with real bytes; not runtime enforcement."""
+        main = (ROOT / 'templates/main.md').read_bytes()
+        def digest(data):
+            start = data.index(b'## Task\n')
+            end = data.index(b'## Plan Review\n', start)
+            return hashlib.sha256(data[start:end]).hexdigest()
+        def ready(data, attempts, expected, pointer):
+            if not attempts:
+                return False
+            latest = attempts[-1]
+            return (latest.get('number') == latest.get('attempt') == expected
+                    and latest.get('digest') == digest(data)
+                    and latest.get('gate') == 'READY' and pointer == latest)
+        first = dict(number=1, attempt=1, digest=digest(main), gate='READY')
+        self.assertTrue(ready(main, [first], 1, first))
+        self.assertFalse(ready(main, [], 1, first))
+        for key in first:
+            missing = {k: v for k, v in first.items() if k != key}
+            self.assertFalse(ready(main, [missing], 1, missing))
+        self.assertFalse(ready(main, [first], 2, first))
+        self.assertFalse(ready(main, [first], 1, {}))
+        for old in (b'{Original task description from human}',
+                    b'{One or two lines defining the completed outcome}', b'### Planner Notes'):
+            changed = main.replace(old, old + b' changed')
+            self.assertFalse(ready(changed, [first], 1, first))
+        second = dict(number=2, attempt=2, digest=digest(main), gate='NEEDS_WORK')
+        self.assertFalse(ready(main, [first, second], 2, second))
+        second['gate'] = 'READY'
+        self.assertTrue(ready(main, [first, second], 2, second))
+        metadata_only = main.replace(b'- **Gate:**', b'- **Gate metadata:**')
+        self.assertEqual(digest(main), digest(metadata_only))
+
+    def test_specification_unchanged_from_pre_repair(self):
+        # Pinned from f89eb31; works in fresh release copies without Git history.
+        current = (ROOT / 'templates/main.md').read_bytes()
+        spec = current[current.index(b'## Task\n'):current.index(b'## Plan Review\n')]
+        self.assertEqual(hashlib.sha256(spec).hexdigest(),
+                         '46e998e420e08cb95041902d5dadb3dc45b1b2b8fc12924f0233aeb4ca341c40')
 
     def test_two_phase_revise_pass_pointer_fixture(self):
         """Exercise artifact shape and report dereferencing; no simulated model claim."""
