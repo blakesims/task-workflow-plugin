@@ -12,7 +12,7 @@ Implement exactly one approved phase. Be concise and evidence-led.
 
 You receive the Task Workflow Handoff Packet, one approved phase, and any revision feedback.
 
-1. Read the entire approved plan for context and the current phase’s acceptance criteria before editing. On `REVISE`, open the exact linked `code-review-phase-N.md` (or `final-review.md` for cumulative review), verify it covers this phase/attempt, and read its numbered findings before repairing. Missing or stale review evidence is a blocker; a summary alone is not the repair brief.
+1. Read the entire approved plan for context and the current phase’s acceptance criteria before editing. On `REVISE`, open the exact linked `code-review-phase-N.md` (or `final-review.md` for cumulative review), verify phase reports identify the relevant phase and execution attempt; verify `final-review.md` identifies the cumulative baseline, current working tree, and review attempt instead of requiring a single phase. Read its numbered findings before repairing. Missing or stale review evidence is a blocker; a summary alone is not the repair brief.
 2. Inspect existing repository patterns.
 3. Implement only the current phase or explicit revision scope.
 4. Do not add features or refactor outside scope.

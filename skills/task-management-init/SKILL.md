@@ -17,7 +17,7 @@ If `tasks/` does not exist, go to Step 2.
 If `tasks/` already exists, do not overwrite anything silently:
 
 1. Read `tasks/main-template.md`. If it contains `## Intent Contract`, `DONE_WHEN`, and the `phase-report-pointers-v1` marker, the template has the current report-pointer structure — report that and stop.
-2. If any are missing (including an older Intent Contract template with inline execution logs), explain the template needs the report-pointer update. Offer to upgrade: back up the old file to `tasks/main-template.legacy.md`, then continue with Step 3 (templates only — leave existing task folders and the populated `global-task-manager.md` untouched, other than telling the user new tasks will use the new template).
+2. If any are missing (including an older Intent Contract template with inline execution logs), explain the template needs the report-pointer update. Offer to upgrade: first check whether `tasks/main-template.legacy.md` exists. If it exists, select a unique, non-overwriting backup path (for example `tasks/main-template.legacy-<timestamp>-<unique-id>.md`) or stop until the collision is resolved. Never overwrite an existing backup. Create and verify the backup before replacing `tasks/main-template.md`, then continue with Step 3 (templates only — leave existing task folders and the populated `global-task-manager.md` untouched, other than telling the user new tasks will use the new template).
 
 ## Step 2: Create the directory structure
 

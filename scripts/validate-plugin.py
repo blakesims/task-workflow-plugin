@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 DEFAULT_ROOT = Path(__file__).resolve().parents[1]
-RELEASE_VERSION = "0.4.1"
+RELEASE_VERSION = "0.4.2"
 EXPECTED_AGENTS = {"planner", "plan-reviewer", "executor", "code-reviewer"}
 EXPECTED_SKILLS = {
     "task-start", "intent-harden", "start", "task-workflow",
@@ -50,6 +50,7 @@ def check(condition: bool, message: str, errors: list[str]) -> None:
 
 
 def validate(root: Path) -> list[str]:
+    """Return release-surface validation errors for the plugin rooted at ``root``."""
     errors: list[str] = []
     required = [
         ".claude-plugin/plugin.json",

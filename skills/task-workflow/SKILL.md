@@ -39,7 +39,7 @@ Keep the entire approved Intent Contract and phased `## Plan` in `main.md`, with
 
 - Executor: write `execution-phase-N.md`, then update the current phase’s status/path under `## Execution Log`.
 - Reviewer: write `code-review-phase-N.md`, then update gate/date/path under `## Code Review Log`. Plan review uses `plan-review.md` and its corresponding compact entry.
-- Keep attempt history and detailed evidence in the reports; replace the same compact pointer entry after retries rather than appending another narrative. Reports identify phase, attempt and baseline.
+- Keep attempt history and detailed evidence in the reports; replace the same compact pointer entry after retries rather than appending another narrative. Phase reports identify phase, execution attempt and baseline. Cumulative `final-review.md` identifies the cumulative baseline, current working tree, and review attempt instead of a single phase.
 - On `REVISE`, the executor must read the exact linked full review and address its numbered findings. The parent passes that path in the repair handoff and checks reports exist and match the current attempt before routing a gate.
 - Parent: maintain overall status/GTM and compact completion outcome/path; full completion evidence goes in `completion.md`. Cumulative review goes in `final-review.md`, linked from a compact final-review entry.
 - If discoveries invalidate approved scope, record them in a separate report and stop `BLOCKED` for explicit replanning authorization. Preserve the old agreement in Git/history and obtain renewed plan review/acceptance before executing changed scope. Do not silently append amendments during execution.

@@ -9,18 +9,21 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def section(text, heading):
+    """Extract a level-two Markdown section without changing its contents."""
     start = text.index(heading + '\n')
     end = text.find('\n## ', start + len(heading) + 1)
     return text[start:end if end >= 0 else len(text)]
 
 
 def specification(text):
+    """Return the entire immutable Task, Intent Contract and Plan sections."""
     return tuple(section(text, heading) for heading in
                  ('## Task', '## Intent Contract', '## Plan'))
 
 
 class ReportPointers(unittest.TestCase):
     def test_template_preserves_entire_phase_plan(self):
+        """Keep the full phase specification and compact mutable report entries."""
         text = (ROOT / 'templates/main.md').read_text()
         plan = section(text, '## Plan')
         for field in ('### Objective', '### Scope', '### Phases',
@@ -35,6 +38,7 @@ class ReportPointers(unittest.TestCase):
                 self.assertNotIn(forbidden, pointer)
 
     def test_agent_ownership_and_repair_handoff(self):
+        """Ensure agent prompts own pointers and route repairs to full reports."""
         executor = (ROOT / 'agents/executor.md').read_text()
         self.assertIn('execution-phase-N.md', executor)
         self.assertIn('under `## Execution Log` in `main.md`', executor)
@@ -54,6 +58,46 @@ class ReportPointers(unittest.TestCase):
         init = (ROOT / 'skills/task-management-init/SKILL.md').read_text()
         self.assertIn('phase-report-pointers-v1', init)
         self.assertIn('leave existing task folders', init)
+
+    def test_cumulative_revise_handoff_fixture(self):
+        """Dereference a cumulative repair brief without requiring a phase label."""
+        executor = (ROOT / 'agents/executor.md').read_text()
+        reviewer = (ROOT / 'agents/code-reviewer.md').read_text()
+        shared = (ROOT / 'skills/task-workflow/SKILL.md').read_text()
+        for prompt in (executor, reviewer, shared):
+            self.assertIn('cumulative baseline, current working tree, and review attempt', prompt)
+        self.assertIn('phase reports identify the relevant phase and execution attempt', executor)
+        self.assertNotIn('verify it covers this phase/attempt', executor)
+        main = (ROOT / 'templates/main.md').read_text()
+        original_spec = specification(main)
+        with tempfile.TemporaryDirectory() as tmp:
+            task = Path(tmp)
+            report = task / 'final-review.md'
+            report.write_text('Cumulative baseline: fixture-base\nCurrent working tree: fixture-tree\n'
+                              'Review attempt: 1\nGate: REVISE\n1. Fix cross-phase integration.\n')
+            block = section(main, '## Code Review Log')
+            main = main.replace(block, block + '\n### Final review\n- **Gate:** REVISE\n'
+                                '- **Report:** [review](final-review.md)\n')
+            pointer = re.findall(r'\[review\]\(([^)]+)\)', section(main, '## Code Review Log'))[-1]
+            evidence = (task / pointer).read_text()
+            for required in ('Cumulative baseline:', 'Current working tree:', 'Review attempt:',
+                             '1. Fix cross-phase integration.'):
+                self.assertIn(required, evidence)
+            self.assertNotIn('Phase 1', evidence)
+            self.assertEqual(original_spec, specification(main))
+            report.unlink()
+            self.assertFalse((task / pointer).is_file(), 'Missing review must block continuation')
+
+    def test_upgrade_backup_collision_contract(self):
+        """Require an explicit collision branch before replacing an old template."""
+        init = (ROOT / 'skills/task-management-init/SKILL.md').read_text()
+        step = init.split('## Step 2:')[0]
+        for phrase in ('check whether `tasks/main-template.legacy.md` exists',
+                       'unique, non-overwriting backup path',
+                       'or stop until the collision is resolved',
+                       'Never overwrite an existing backup',
+                       'Create and verify the backup before replacing'):
+            self.assertIn(phrase, step)
 
     def test_two_phase_revise_pass_pointer_fixture(self):
         """Exercise artifact shape and report dereferencing; no simulated model claim."""
