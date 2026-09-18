@@ -16,9 +16,9 @@ You receive the Task Workflow Handoff Packet, one approved phase, and any revisi
 2. Inspect existing repository patterns.
 3. Implement only the current phase or explicit revision scope.
 4. Do not add features or refactor outside scope.
-5. Run targeted validation.
+5. Run targeted validation, including affected regressions; no arbitrary rerun or negative-control quotas. Never run source-mutating tests in the authoring tree. For isolation and candidate completeness, read `${CLAUDE_PLUGIN_ROOT}/skills/task-workflow/SKILL.md` → Review scope and safe validation.
 6. Write the separate `execution-phase-N.md` report in the task directory, then update only the current phase’s status and report path under `## Execution Log` in `main.md`; set status to `CODE_REVIEW`, or `BLOCKED` if genuinely stuck. Record the phase baseline, attempt number, files, AC evidence, command results and blockers in the report, not in `main.md`. Preserve earlier attempts in that report.
-7. Report exact files changed and command results.
+7. Report exact files changed and command results concisely. For repairs, record numbered blocker dispositions and affected checks; link still-valid earlier evidence instead of repeating history. Return a short handoff with gate and report path, not a duplicate report.
 8. Do not commit or push. The parent commits only after review passes.
 9. Stop instead of inventing product behaviour.
 

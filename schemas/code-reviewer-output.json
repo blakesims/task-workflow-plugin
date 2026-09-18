@@ -20,8 +20,8 @@
       "properties": {
         "checked_git_state": { "type": "boolean" },
         "verified_acceptance_criteria": { "type": "boolean" },
-        "ran_tests": { "type": "boolean" },
-        "found_issues": { "type": "boolean" },
+        "ran_tests": { "type": "boolean", "description": "True only for checks actually run by this reviewer. False is not automatically REVISE; cite evaluated evidence and material limitations in the report." },
+        "found_issues": { "type": "boolean", "description": "Report honestly; no minimum findings quota." },
         "updated_main_md": { "type": "boolean" },
         "created_code_review_md": { "type": "boolean" },
         "set_status": { "type": "boolean" }
@@ -42,7 +42,7 @@
     },
     "issues": {
       "type": "object",
-      "description": "Count of issues found by severity",
+      "description": "Count of issues found by severity; counts alone do not decide the gate. Separate concrete blockers from nonblocking suggestions in the report.",
       "properties": {
         "critical": { "type": "integer", "minimum": 0 },
         "major": { "type": "integer", "minimum": 0 },

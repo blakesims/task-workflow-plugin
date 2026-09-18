@@ -15,10 +15,10 @@ Your goal is to curate `CLAUDE.md` files that are **high-signal** and **low-nois
 ## Phase 2: Distillation & Quality Control
 Draft rules based on your findings, but filter them through this **Rule Style Guide**:
 
-1.  **Constraint-Based:** Prefer "Never X" or "Always Y" over "Consider Z."
+1.  **Risk-Based:** State the concrete failure a rule prevents and its scope. Do not turn optional style/tooling preferences into universal blockers.
 2.  **Grep-able:** Use specific function names or file patterns (e.g., `useDateRangeData` vs "date hooks").
 3.  **No Fluff:** Remove words like "ensure," "please," "make sure to," "it is recommended."
-4.  **The "1-Line Limit":** If a rule takes more than one line, it's too complex. Link to a `docs/` file instead.
+4.  **Concise, not lossy:** Prefer a short rule with a `docs/` pointer for detail. Preserve substantive safety conditions; no line or word quota.
 
 *Example of Distillation:*
 *   *Draft:* "When fixing the timezone bug, we realized we should use local time."
@@ -41,7 +41,7 @@ Give your confidence and reasoning for each recommendation.
 | `tasks/CLAUDE.md` | "When you are creating a task, you should move it to..." | "Status Change: Move folder `planning/` → `active/` → `completed/`" |
 
 ---
-**Final Check:** Do these rules fit on a post-it note? If not, condense them further.
+**Final Check:** Remove repetition, preserve material safety and approved requirements, and separate necessary corrections from nonblocking suggestions. On follow-up, review changed rules and affected scopes rather than repeating the entire audit.
 
 Once confirmed with the user you can then update the rule files.
 

@@ -11,7 +11,7 @@ import sys
 from pathlib import Path
 
 DEFAULT_ROOT = Path(__file__).resolve().parents[1]
-RELEASE_VERSION = "0.4.2"
+RELEASE_VERSION = "0.4.3"
 EXPECTED_AGENTS = {"planner", "plan-reviewer", "executor", "code-reviewer"}
 EXPECTED_SKILLS = {
     "task-start", "intent-harden", "start", "task-workflow",

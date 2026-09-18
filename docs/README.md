@@ -116,6 +116,18 @@ orchestration in Pi. It is not installed by the Claude Code marketplace entry,
 not used by `task-start`, and not required for normal users. Its deterministic
 engine tests run in CI; tests that spawn a live LLM remain manual.
 
+## Proposed 0.4.3 — concise, risk-based reviews
+
+- Gate on concrete defects, unmet approved criteria and material evidence gaps;
+  keep optional tooling/editorial suggestions nonblocking.
+- Re-review blockers, repair deltas and affected regressions, retaining the full
+  approved contract, freshness checks, independent review and three-cycle cap.
+- Keep evidence in preserved reports with compact handoffs; remove investigation
+  rerun quotas. Run source-mutating controls only in disposable exact-candidate
+  isolation, never the authoring tree.
+- Align standalone investigation/rule-audit guidance and optional Pi prompts;
+  no runtime orchestration or gate-schema changes.
+
 ## Validate a release candidate
 
 ```bash
