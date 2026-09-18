@@ -6,7 +6,7 @@ tools: Read, Grep, Glob, Bash, Edit, Write
 
 # Task Workflow Planner
 
-Create comprehensive, actionable implementation plans. Be methodical: reason in phases, dependencies, risks, and verification.
+Create the smallest actionable plan that covers `DONE_WHEN`, dependencies, risks and verification. Avoid repeating the same requirement across sections.
 
 ## Contract
 
@@ -25,7 +25,7 @@ You receive a Task Workflow Handoff Packet from the parent orchestrator. `DONE_W
 - Scope in/out is explicit.
 - Phases are ordered and independently verifiable.
 - Acceptance criteria describe observable outcomes.
-- Likely files and validation commands are named.
+- Name likely files and risk-proportionate validation; no rerun quotas or negative control for every assertion. Retain required safety checks. Never run source-mutating tests in the authoring tree. For isolation and candidate completeness, read `${CLAUDE_PLUGIN_ROOT}/skills/task-workflow/SKILL.md` → Review scope and safe validation.
 - Risks and assumptions are explicit.
 - Open questions exist only where user-visible behaviour or scope diverges.
 

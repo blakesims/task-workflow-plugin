@@ -35,17 +35,17 @@ A quickfix enters `tasks/active/` at routing and runs as a single phase. The par
 
 ## Approved plan and report pointers
 
-Keep the entire approved Intent Contract and phased `## Plan` in `main.md`, with its existing what/how/where structure. Once accepted and execution starts, that specification is a historical snapshot: do not expand it with findings, amendments, command output or execution history. Do not tick specification checkboxes; progress belongs in compact status/outcome/path entries outside `## Plan`. Typically only a handful of pointer/status lines change per agent run, not a cumulative ten-line quota across the task.
+Keep the entire approved Task, Intent Contract and phased `## Plan` in `main.md` as the historical what/how/where agreement. Do not amend it, tick its checkboxes or append execution/review material. Agents write separate reports first, then replace compact status/outcome/path entries outside the specification; this is not a cumulative line quota.
 
-- Executor: write `execution-phase-N.md`, then update the current phase’s status/path under `## Execution Log`.
-- Reviewer: write `code-review-phase-N.md`, then update gate/date/path under `## Code Review Log`. Plan review uses `plan-review.md` and its corresponding compact entry. Each numbered attempt records `Review attempt` and `Reviewed specification SHA-256` for the exact Task/Intent/entire Plan byte range defined in task-start. The parent compares the latest report and pointer with the dispatched attempt and freshly computed current specification digest before routing `READY`; missing or stale plan-review evidence blocks continuation, including after retries or authorized replans. Keep this metadata outside the specification.
-- Keep attempt history and detailed evidence in the reports; replace the same compact pointer entry after retries rather than appending another narrative. Phase reports identify phase, execution attempt and baseline. Cumulative `final-review.md` identifies the cumulative baseline, current working tree, and review attempt instead of a single phase.
-- On `REVISE`, the executor must read the exact linked full review and address its numbered findings. The parent passes that path in the repair handoff and checks reports exist and match the current attempt before routing a gate.
-- Parent: maintain overall status/GTM and compact completion outcome/path; full completion evidence goes in `completion.md`. Cumulative review goes in `final-review.md`, linked from a compact final-review entry.
-- If discoveries invalidate approved scope, record them in a separate report and stop `BLOCKED` for explicit replanning authorization. Preserve the old agreement in Git/history and obtain renewed plan review/acceptance before executing changed scope. Do not silently append amendments during execution.
-- Existing tasks are not automatically rewritten. Preserve their historical inline records; before resuming, agree on which plan revision is authoritative and use separate reports with compact pointers for new work. Upgrade copied templates only with consent.
+- Executor: `execution-phase-N.md` → current phase under `## Execution Log`.
+- Reviewer: `code-review-phase-N.md` → gate/date/path under `## Code Review Log`. Phase reports identify phase, execution attempt and baseline. `final-review.md` identifies cumulative baseline, current working tree, and review attempt, linked by a compact final-review entry.
+- Plan reviewer: preserve numbered attempts in `plan-review.md`, recording `Review attempt` and `Reviewed specification SHA-256` for the exact Task/Intent/entire Plan byte range defined in task-start. Before `READY`, the parent compares latest report/pointer/dispatched attempt and freshly computed current digest; missing/stale evidence blocks, including after retries/replans. Metadata stays outside the specification.
+- On `REVISE`, pass the exact current full review path; the executor must read its numbered blockers before repair. Parent checks report existence and current attempt before routing gates.
+- Parent: status/GTM and compact completion pointer; full completion evidence in `completion.md`.
+- If evidence invalidates scope, record it separately and stop `BLOCKED` for explicit replanning authorization and renewed review/acceptance. Preserve the earlier agreement in Git/history.
+- Do not automatically rewrite historical tasks or upgrade copied templates without consent. Agree on the authoritative plan revision before resuming; preserve old records and use separate reports for new work.
 
-The parent compares the approved specification against its accepted Git revision (including its original path if the task moved) before routing gates. Reject unauthorized specification changes; permit the declared executor/reviewer pointer updates. This is a prompt-driven workflow, not a filesystem write sandbox. The regression checks validate shipped instructions and artifact examples; they do not guarantee a model obeys them.
+Before routing gates, compare the full approved specification against its accepted Git revision and original path; only declared metadata/pointers may change. These are prompt-level safeguards, not a filesystem sandbox. Tests cover instructions/artifact fixtures, not guaranteed model compliance.
 
 ## Ownership and gates
 
@@ -69,6 +69,13 @@ The parent compares the approved specification against its accepted Git revision
 
 Maximum three `NEEDS_WORK` or `REVISE` cycles before blocking. If a reviewer returns a verdict without persisting its declared artifacts, the parent writes the exact output to the separate report and updates only its outcome/path pointer before routing the gate.
 
+## Review scope and safe validation
+
+- Block on concrete defects, unmet criteria or material evidence gaps. Tooling/editorial suggestions do not force revision unless they affect executable requirements, required evidence or safety decisions. Do not waive approved criteria.
+- Re-review prior blockers, repair delta and affected regressions/dependencies. Keep the full contract, cumulative integration obligations and freshness checks; reference still-valid evidence and expand review when new evidence undermines it.
+- Choose checks by risk, not quotas for findings, reruns or negative controls. Inspect test configuration before running. Source-mutating controls must run only in a disposable isolated copy of the exact candidate, including uncommitted and untracked candidate files, with no shared writable source or live-service side effects. Never run them in the authoring tree; report unavailable safe verification as a gap. Required completion checks remain required, safely isolated when necessary.
+- Preserve reports/attempts. Record blocker dispositions, changed evidence and prior report/attempt pointers, not repeated history. Handoffs carry gate, decisions, current attempt/baseline and exact paths; write full evidence once.
+
 ## Git and substrate discipline
 
 - Choose current branch, feature branch, or worktree from repository instructions, Git state, concurrency, and delivery expectations; record the strategy, rationale, and task baseline SHA in `main.md`.
@@ -84,4 +91,4 @@ Record the exact blocker and attempted work in the current phase report (or `blo
 
 ## Completion
 
-Run the repository's full tests/lint/build checks, compare the cumulative result with `DONE_WHEN`, write full evidence to `completion.md` and update only the outcome/date/path under `## Completion`, move the task to `tasks/completed/`, update the GTM, and commit the ledger update. Follow the recorded delivery strategy; do not push, merge, open a PR, or deploy unless authorized.
+Run the repository's full tests/lint/build checks under the safe-validation rules above, compare the cumulative result with `DONE_WHEN`, write full evidence to `completion.md` and update only the outcome/date/path under `## Completion`, move the task to `tasks/completed/`, update the GTM, and commit the ledger update. Follow the recorded delivery strategy; do not push, merge, open a PR, or deploy unless authorized.

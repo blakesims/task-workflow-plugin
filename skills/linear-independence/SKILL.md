@@ -27,7 +27,7 @@ Do **not** ask me questions that can be answered by:
 * using standard implementation conventions
 * choosing an internal technical detail with no product or architecture impact
 
-If a question is purely technical, answer it yourself from the codebase and proceed.
+If a technical choice has no material product, architecture or operational impact, answer it from the codebase and proceed. Otherwise surface the consequential decision, not its implementation trivia.
 
 If there are many related questions, compress them into the smallest linearly independent set: no question should be a duplicate, subset, or consequence of another.
 

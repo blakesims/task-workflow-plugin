@@ -31,7 +31,13 @@ nodes:
       Affected records: {{investigator.output.affected_records_count}}
       Details file: {{investigator.output.technical_details_file}}
 
-      Re-run the investigator's queries. Verify every claim.
+      Open the details file. Independently check risk-critical evidence under the
+      reviewer persona's safe-check rules; distinguish blockers from suggestions.
+
+      {{#if reviewer.output.challenges_for_investigator}}
+      Prior blockers: {{reviewer.output.challenges_for_investigator}}
+      Check their resolution and affected conclusions, retaining the full question.
+      {{/if}}
 
 loops:
   investigation_loop:

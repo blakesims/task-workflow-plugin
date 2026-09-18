@@ -92,6 +92,8 @@ Create this packet once intent is settled. It is the authoritative boundary for 
 ## Accepted plan reference <!-- Git commit and original main.md path; specification stays unchanged -->
 ```
 
+Dispatch packet + exact plan/report paths + current attempt/baseline; agents open files, not pasted histories. Retries include prior blockers, repair delta and targeted results, retaining all approved criteria and affected regressions. Follow shared review/safe-validation rules; parent checks freshness and routes gates, not a duplicate review.
+
 ## Stage 2 — Route
 
 Choose a lane and record it under `Lane:` in `main.md`:
@@ -99,7 +101,7 @@ Choose a lane and record it under `Lane:` in `main.md`:
 - **quickfix** — a small bounded change with one plausible site, obvious validation, and no product ambiguity. Skip planner/plan-reviewer; record the accepted packet as a compact Phase 1 in the existing plan structure, commit the task setup, and record that Git revision/path as the accepted specification before Stage 3. Code review still runs in full.
 - **planned** — everything else. Continue to planning below.
 
-**Planning (planned lane).** Spawn `task-workflow:planner` with the full packet; it creates the phased plan without implementing. Then spawn `task-workflow:plan-reviewer` with the packet, the plan, the exact `main.md` and `plan-review.md` paths, and instructions to judge against `DONE_WHEN` from repository evidence and write its full verdict to `plan-review.md`, updating only gate/date/review-attempt/specification-digest/report-path metadata under `## Plan Review` in `main.md`. Before each dispatch (including retries and authorized replans), increment the review attempt monotonically, clear the prior gate to pending, and compute the SHA-256 of the exact UTF-8 bytes from `## Task\n` up to (excluding) `## Plan Review\n` in `main.md`, including separators with no normalization. Pass that digest and attempt to the reviewer; keep metadata outside the specification.
+**Planning (planned lane).** Spawn `task-workflow:planner` with the packet to write the plan. Dispatch `task-workflow:plan-reviewer` with packet, `main.md` and `plan-review.md` paths; it persists the review and compact metadata under the shared artifact contract. Before each dispatch (including retries and authorized replans), increment the review attempt monotonically, clear the prior gate to pending, and compute the SHA-256 of the exact UTF-8 bytes from `## Task\n` up to (excluding) `## Plan Review\n` in `main.md`, including separators with no normalization. Pass that digest and attempt to the reviewer; keep metadata outside the specification.
 
 Before routing the plan-review gate, open `plan-review.md` and require its latest numbered attempt, `Review attempt`, `Reviewed specification SHA-256`, and gate to agree with the dispatched attempt and compact pointer. Recompute the current specification digest using the same byte range and require equality with the reviewed digest. Reject missing or stale plan-review evidence: block continuation and obtain a fresh review; never reuse an earlier `READY` after a retry, plan edit, or replan. Do not invent missing metadata when persisting a reviewer output. Recheck immediately before accepting/committing the specification.
 
@@ -116,8 +118,8 @@ If any reviewer returns a verdict without writing its declared artifacts, the pa
 For each approved phase (a quickfix is one phase):
 
 1. Require `git status --short` empty before phase preparation; capture the phase baseline SHA in the handoff. Set status `EXECUTING_PHASE_N`; declare this metadata-only change to the executor so it is not mistaken for unrelated dirty work. The executor records the baseline in `execution-phase-N.md`, not in the plan. Repairs retain the original phase baseline and expected task changes.
-2. Spawn `task-workflow:executor` with the packet, the entire approved plan for context, the current phase as its execution scope, exact `main.md` and `execution-phase-N.md` paths, and any revision feedback/report path. It writes the separate report and updates only its compact phase status/path entry in `main.md`; source changes stay uncommitted. Require the report before dispatching review.
-3. Set status `CODE_REVIEW`. Spawn `task-workflow:code-reviewer` with the packet, the current phase, the linked execution report, phase baseline SHA, and exact `main.md` / `code-review-phase-N.md` paths. It reads the execution report, inspects the actual diff, runs checks, writes its full review separately and updates its compact outcome/date/path entry. Before routing any gate, check report existence and current phase/attempt, and compare the approved Intent Contract/entire plan against its accepted Git revision: only declared status/pointer changes outside the specification are allowed.
+2. Dispatch `task-workflow:executor`: packet, entire approved plan reference, current phase, `main.md` / `execution-phase-N.md` paths and any repair report. It follows the shared artifact contract and leaves source uncommitted. Require its report before review.
+3. Set `CODE_REVIEW`. Dispatch `task-workflow:code-reviewer`: packet, current phase, execution report, baseline SHA and `main.md` / `code-review-phase-N.md` paths. Require inspection of the actual diff including enumerated untracked candidate files and risk-proportionate checks. Before routing, verify report existence/current phase/attempt and compare the full approved specification to its accepted Git revision; only declared metadata/pointers may change.
 4. Route the gate:
    - `PASS` — stage only the reviewed paths plus the current task artifacts using `git add -- <path...>`; verify `git diff --cached --name-only`; commit on the working branch with a task/phase-specific message; verify a clean tree; continue.
    - `REVISE` — pass the exact current full review path to the executor, which must read it and repair the numbered findings before re-review; maximum three cycles. Preserve attempt history in the separate reports, replacing only the compact pointers in `main.md`. Missing/stale report evidence blocks continuation.
@@ -130,7 +132,7 @@ Never use `git add .`, `git add -A`, or broad path globs. Never stage a path the
 
 After every phase passes:
 
-- run the repository's full tests/lint/build checks;
+- run the repository's full tests/lint/build checks under the shared safe-validation rules; isolate source-mutating suites rather than running them in the authoring tree;
 - if the task had more than one phase, dispatch the code reviewer on the cumulative diff from the task baseline SHA through the **current working tree** (including any uncommitted repairs and explicitly enumerated untracked files) against `DONE_WHEN`, writing `final-review.md` and a compact final-review gate/path entry under `## Code Review Log`; require `PASS`. On `REVISE`, the executor reads that exact report and repairs within approved scope, then the cumulative review runs again against the working tree (maximum three cycles). After `PASS`, the parent verifies/stages only reviewed source and report paths and commits any repairs before completion; on `FAIL` or exhausted cycles, block rather than complete;
 - write full completion evidence to `completion.md`; update only date/outcome/report path under `## Completion` in `main.md`, set status `COMPLETE`, move the task to `tasks/completed/`, update the GTM, and commit the ledger updates;
 - follow the recorded delivery strategy; do not push, merge, open a PR, or deploy unless authorized.

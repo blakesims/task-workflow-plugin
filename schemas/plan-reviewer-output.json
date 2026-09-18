@@ -35,7 +35,7 @@
     },
     "issues": {
       "type": "object",
-      "description": "Count of issues found by severity",
+      "description": "Count of issues found by severity; counts alone do not decide the gate. Separate concrete blockers from nonblocking suggestions in the report.",
       "properties": {
         "critical": { "type": "integer", "minimum": 0 },
         "major": { "type": "integer", "minimum": 0 },

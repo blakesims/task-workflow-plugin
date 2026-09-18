@@ -23,6 +23,83 @@ def specification(text):
 
 
 class ReportPointers(unittest.TestCase):
+    def test_risk_based_review_contracts(self):
+        """Lexical tripwires, not semantic validation; update with intended rewrites."""
+        for path in ('agents/code-reviewer.md', 'agents/plan-reviewer.md',
+                     'skills/investigation-review/SKILL.md',
+                     'pi-extension/personas/reviewer.md'):
+            with self.subTest(path=path):
+                text = (ROOT / path).read_text().lower()
+                for concept in (r'nonblocking suggestions', r'blockers', r'evidence',
+                                r're-review', r'affected', r'prior', r'limitations|scope'):
+                    self.assertRegex(text, concept)
+                self.assertRegex(text, r'full (approved criteria|investigation question)|complete `done_when`')
+                self.assertNotRegex(text, r're-run at least \d|challenge at least one|unsure = revise')
+        code = (ROOT / 'agents/code-reviewer.md').read_text().lower()
+        for concept in ('staged', 'unstaged', 'untracked', 'cumulative integration', 'still-valid'):
+            self.assertIn(concept, code)
+        shared = (ROOT / 'skills/task-workflow/SKILL.md').read_text().lower()
+        self.assertRegex(shared, r'maximum three')
+        self.assertIn('do not waive approved criteria', shared)
+
+    def test_safe_validation_instruction_surfaces(self):
+        """Each independently dispatched role retains the isolation boundary."""
+        paths = ('agents/planner.md', 'agents/executor.md', 'agents/plan-reviewer.md',
+                 'agents/code-reviewer.md', 'skills/task-workflow/SKILL.md',
+                 'skills/scientific-method/SKILL.md', 'skills/investigation-review/SKILL.md',
+                 'pi-extension/personas/investigator.md', 'pi-extension/personas/reviewer.md')
+        for path in paths:
+            with self.subTest(path=path):
+                text = (ROOT / path).read_text().lower()
+                for concept in (r'source-mutating', r'authoring tree'):
+                    self.assertRegex(text, concept)
+                if path.startswith('pi-extension/personas/'):
+                    # Workers receive raw persona text in an arbitrary project cwd.
+                    self.assertNotIn('../skills/', text)
+                    for concept in (r'disposable isolated', r'exact candidate',
+                                    r'uncommitted', r'untracked', r'live.service',
+                                    r'no shared writable source'):
+                        self.assertRegex(text, concept)
+                elif path != 'skills/task-workflow/SKILL.md':
+                    self.assertIn('skills/task-workflow/SKILL.md', (ROOT / path).read_text())
+        shared = section((ROOT / 'skills/task-workflow/SKILL.md').read_text(),
+                         '## Review scope and safe validation').lower()
+        for concept in (r'disposable isolated', r'exact candidate', r'uncommitted',
+                        r'untracked', r'live.service', r'no shared writable source'):
+            self.assertRegex(shared, concept)
+        start = (ROOT / 'skills/task-start/SKILL.md').read_text().lower()
+        self.assertIn('safe-validation', start)
+        self.assertIn('full tests/lint/build', start)
+        graph = (ROOT / 'pi-extension/graphs/investigation-grinder.yaml').read_text().lower()
+        self.assertIn('safe-check', graph)
+        self.assertNotIn('verify every claim', graph)
+
+    def test_delta_report_preserves_prior_evidence_fixture(self):
+        """A report can carry full criteria by pointers without copying history.
+
+        This exercises artifacts, not model judgment or a runtime gate engine.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            task = Path(tmp)
+            review = task / 'code-review-phase-1.md'
+            prior = ('## Attempt 1\nBaseline: fixture-base; execution attempt: 1\n'
+                     'Gate: REVISE\nAC1: supported by tests/unit.\n'
+                     'AC2 / F1: boundary failure; repair and check integration.\n')
+            review.write_text(prior)
+            with review.open('a') as out:
+                out.write('\n## Attempt 2\nBaseline: fixture-base; execution attempt: 2\n'
+                          'Gate: PASS\nAC1: evidence unchanged; see code-review-phase-1.md#attempt-1.\n'
+                          'AC2 / F1: repaired; targeted boundary and affected integration checks passed.\n'
+                          'Nonblocking suggestion: shorten a test comment.\n')
+            text = review.read_text()
+            self.assertTrue(text.startswith(prior))
+            latest = text.split('## Attempt 2')[1]
+            self.assertEqual(set(re.findall(r'AC\d', prior)), set(re.findall(r'AC\d', latest)))
+            self.assertEqual(text.count('supported by tests/unit'), 1)
+            target, anchor = re.search(r'(code-review-phase-1.md)#(attempt-1)', latest).groups()
+            self.assertTrue((task / target).is_file())
+            self.assertIn('## ' + anchor.replace('-', ' ').title(), (task / target).read_text())
+
     def test_template_preserves_entire_phase_plan(self):
         """Keep the full phase specification and compact mutable report entries."""
         text = (ROOT / 'templates/main.md').read_text()
@@ -65,6 +142,19 @@ class ReportPointers(unittest.TestCase):
         executor = (ROOT / 'agents/executor.md').read_text()
         reviewer = (ROOT / 'agents/code-reviewer.md').read_text()
         shared = (ROOT / 'skills/task-workflow/SKILL.md').read_text()
+        # Guard the separate input branches; this is a lexical prompt check.
+        phases = re.findall(r'^- Phase review: (.+)$', reviewer, re.M)
+        cumulative_reviews = re.findall(r'^- Cumulative final review: (.+)$', reviewer, re.M)
+        self.assertEqual(len(phases), 1)
+        self.assertEqual(len(cumulative_reviews), 1)
+        phase, cumulative = phases[0], cumulative_reviews[0]
+        for token in ('execution report', 'phase', 'attempt', 'baseline'):
+            self.assertIn(token, phase)
+        for token in ('task baseline', 'current working tree', 'uncommitted',
+                      'untracked', 'review attempt', 'final-review.md'):
+            self.assertIn(token, cumulative)
+        self.assertIn('not one phase report', cumulative)
+        self.assertIn('blocks routing', cumulative)
         for prompt in (executor, reviewer, shared):
             self.assertIn('cumulative baseline, current working tree, and review attempt', prompt)
         self.assertIn('phase reports identify the relevant phase and execution attempt', executor)
