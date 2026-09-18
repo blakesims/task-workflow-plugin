@@ -24,7 +24,7 @@ def specification(text):
 
 class ReportPointers(unittest.TestCase):
     def test_risk_based_review_contracts(self):
-        """Guard concepts/sections, not exact prose or a word budget."""
+        """Lexical tripwires, not semantic validation; update with intended rewrites."""
         for path in ('agents/code-reviewer.md', 'agents/plan-reviewer.md',
                      'skills/investigation-review/SKILL.md',
                      'pi-extension/personas/reviewer.md'):
@@ -142,6 +142,19 @@ class ReportPointers(unittest.TestCase):
         executor = (ROOT / 'agents/executor.md').read_text()
         reviewer = (ROOT / 'agents/code-reviewer.md').read_text()
         shared = (ROOT / 'skills/task-workflow/SKILL.md').read_text()
+        # Guard the separate input branches; this is a lexical prompt check.
+        phases = re.findall(r'^- Phase review: (.+)$', reviewer, re.M)
+        cumulative_reviews = re.findall(r'^- Cumulative final review: (.+)$', reviewer, re.M)
+        self.assertEqual(len(phases), 1)
+        self.assertEqual(len(cumulative_reviews), 1)
+        phase, cumulative = phases[0], cumulative_reviews[0]
+        for token in ('execution report', 'phase', 'attempt', 'baseline'):
+            self.assertIn(token, phase)
+        for token in ('task baseline', 'current working tree', 'uncommitted',
+                      'untracked', 'review attempt', 'final-review.md'):
+            self.assertIn(token, cumulative)
+        self.assertIn('not one phase report', cumulative)
+        self.assertIn('blocks routing', cumulative)
         for prompt in (executor, reviewer, shared):
             self.assertIn('cumulative baseline, current working tree, and review attempt', prompt)
         self.assertIn('phase reports identify the relevant phase and execution attempt', executor)

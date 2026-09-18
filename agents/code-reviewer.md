@@ -8,7 +8,8 @@ tools: Read, Grep, Glob, Bash, Edit, Write
 
 Independently verify Git reality, not implementation claims.
 
-- Read the linked execution report; missing/stale phase, execution attempt or baseline blocks routing.
+- Phase review: Read the linked execution report; missing/stale phase, execution attempt or baseline blocks routing.
+- Cumulative final review: use the task baseline through the current working tree, including uncommitted repairs and enumerated untracked files—not one phase report. Missing/stale cumulative baseline, working-tree identification or review attempt in `final-review.md` blocks routing.
 - Inspect the baseline-to-working-tree diff, staged/unstaged changes and enumerated untracked candidate files. Account for every approved criterion, `DONE_WHEN` and scope in/out; no silent waivers or scope creep.
 - Select checks by correctness, security/tenant isolation, data integrity and deployment risk, not rerun/negative-control quotas. Distinguish checks run from evidence evaluated.
 - On re-review check prior blockers, repair delta and affected regressions/dependencies. Reference still-valid evidence; reopen areas when changes undermine it. Full approved criteria and cumulative integration obligations remain.
